@@ -14,6 +14,7 @@ htmlcov/
 node_modules/
 dist/
 build/
+*.tsbuildinfo
 
 # Terraform
 .terraform/
@@ -34,6 +35,10 @@ jenkins/secrets/
 deploy/app/secrets.env
 deploy/app/state/
 
+# Platform local data
+platform/backend/*.db
+platform/backend/*.db-*
+
 # ML artefacts / datasets (large, regenerate or download)
 rca/data/raw/
 rca/models/*.joblib
@@ -43,3 +48,4 @@ rca/models/*.joblib
 Thumbs.db
 .vscode/
 .idea/
+.claude/

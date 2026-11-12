@@ -2,6 +2,7 @@
 #   Jenkins host : 22 SSH (admin), 8080 Jenkins UI (admin + GitHub webhooks),
 #                  9100 node-exporter (from app host's Prometheus)
 #   App host     : 22 SSH (admin + Jenkins deploys), 80 demo app (public + Jenkins smoke tests),
+#                  8000 platform API (admin + Jenkins pipeline events),
 #                  3000 Grafana, 9090 Prometheus, 8000 platform API, 8081 platform UI (admin)
 #   Loki (3100) and Alertmanager (9093) stay internal to the app host's Docker network.
 
@@ -83,8 +84,9 @@ resource "aws_vpc_security_group_ingress_rule" "app_ssh_admin" {
 
 resource "aws_vpc_security_group_ingress_rule" "app_from_jenkins" {
   for_each = {
-    ssh_deploy  = 22
-    smoke_tests = 80
+    ssh_deploy      = 22
+    smoke_tests     = 80
+    pipeline_events = 8000 # Jenkinsfile notifyPlatform() -> platform-api
   }
   security_group_id            = aws_security_group.app.id
   description                  = "${each.key} from Jenkins"

@@ -27,8 +27,8 @@ Terraform provisions the infrastructure; Jenkins executes delivery pipelines.
 | `jenkins/`, `Jenkinsfile` | Jenkins-as-code and CI/CD pipeline ([guide](jenkins/README.md)) | ✅ Steps 3–4 |
 | `deploy/` | App-host compose file, release controller (`appctl.sh`), smoke tests ([guide](deploy/README.md)) | ✅ Step 4 |
 | `monitoring/` | Prometheus, Alertmanager, Grafana, Loki, Promtail, cAdvisor, alert rules, dashboards ([guide](monitoring/README.md)) | ✅ Step 5 |
-| `platform/backend/` | FastAPI platform API + incident collector | Step 6 |
-| `platform/frontend/` | React dashboard | Step 6 |
+| `platform/backend/` | FastAPI platform API + incident collector ([guide](platform/README.md)) | ✅ Step 6 |
+| `platform/frontend/` | React website: Dashboard, Pipeline, Deployments, Monitoring, Logs, Incidents, Recovery | ✅ Step 6 |
 | `rca/` | Root-cause analysis models and evaluation | Step 7 |
 | `docs/` | Roadmap, setup guide, report material | ongoing |
 

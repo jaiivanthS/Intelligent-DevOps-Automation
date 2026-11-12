@@ -1,0 +1,45 @@
+# Platform website on the app host (/opt/platform). Start with ./setup.sh.
+#   platform-ui  :8081  React UI (nginx) - admin IPs only (security group)
+#   platform-api :8000  FastAPI - admin IPs + Jenkins host (pipeline events)
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "3" }
+
+services:
+  platform-api:
+    build: ./backend
+    image: devops-platform/platform-api:local
+    container_name: platform-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PLATFORM_DB: /data/platform.db
+      PROMETHEUS_URL: http://prometheus:9090
+      LOKI_URL: http://loki:3100
+      ALERTMANAGER_URL: http://alertmanager:9093
+      APP_URL: http://demo-app:8000
+      APP_STATE_DIR: /app-state
+    ports: ["8000:8000"]
+    volumes:
+      - platform_data:/data
+      - /opt/app/state:/app-state:ro # release state written by appctl.sh
+    labels:
+      platform.service: platform-api
+    logging: *logging
+
+  platform-ui:
+    build: ./frontend
+    image: devops-platform/platform-ui:local
+    container_name: platform-ui
+    restart: unless-stopped
+    ports: ["8081:8081"]
+    depends_on: [platform-api]
+    logging: *logging
+
+volumes:
+  platform_data:
+
+networks:
+  default:
+    name: devops-net
+    external: true
