@@ -1,0 +1,4 @@
+# node-exporter on the Jenkins host (rewritten by setup.sh from /etc/devops-platform.env).
+- targets: ["10.20.1.10:9100"]
+  labels:
+    host: jenkins-host

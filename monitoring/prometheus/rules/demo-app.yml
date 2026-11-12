@@ -1,0 +1,135 @@
+# Alert rules. Every alert carries:
+#   severity: critical | warning | info
+#   category: availability | errors | latency | saturation | dependency | ci
+#   service : the affected service
+# The platform's incident collector (step 6) and the RCA engine (step 7) use these labels.
+
+groups:
+  - name: demo-app.recording
+    interval: 15s
+    rules:
+      - record: service:http_requests:rate2m
+        expr: sum by (service) (rate(http_requests_total{job="demo-app"}[2m]))
+      - record: service:http_errors:rate2m
+        expr: sum by (service) (rate(http_requests_total{job="demo-app", status=~"5.."}[2m]))
+      - record: service:http_error_ratio:rate2m
+        expr: service:http_errors:rate2m / clamp_min(service:http_requests:rate2m, 1e-9)
+      - record: service:http_latency_p95:2m
+        expr: >
+          histogram_quantile(0.95, sum by (service, le) (
+            rate(http_request_duration_seconds_bucket{job="demo-app", route!~"/health|/ready|/metrics"}[2m])
+          ))
+
+  - name: demo-app.alerts
+    rules:
+      - alert: DemoAppDown
+        expr: up{job="demo-app"} == 0
+        for: 1m
+        labels: { severity: critical, category: availability, service: demo-app }
+        annotations:
+          summary: "demo-app is not responding to Prometheus scrapes"
+          description: "Target {{ $labels.instance }} has been down for more than 1 minute."
+
+      - alert: HighErrorRate
+        expr: service:http_error_ratio:rate2m{service="demo-app"} > 0.05 and service:http_requests:rate2m{service="demo-app"} > 0.1
+        for: 2m
+        labels: { severity: critical, category: errors, service: demo-app }
+        annotations:
+          summary: "demo-app 5xx error ratio is {{ $value | humanizePercentage }}"
+          description: "More than 5% of requests failed over the last 2 minutes."
+
+      - alert: HighLatencyP95
+        expr: service:http_latency_p95:2m{service="demo-app"} > 0.5
+        for: 2m
+        labels: { severity: warning, category: latency, service: demo-app }
+        annotations:
+          summary: "demo-app p95 latency is {{ $value | humanizeDuration }}"
+          description: "95th percentile API latency above 500 ms for 2 minutes."
+
+      - alert: DependencyDown
+        expr: dependency_up{job="demo-app"} == 0
+        for: 1m
+        labels: { severity: critical, category: dependency, service: demo-app }
+        annotations:
+          summary: "demo-app cannot reach {{ $labels.dependency }}"
+          description: "Readiness is failing and API requests return 503."
+
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes{job="demo-app"} > 400 * 1024 * 1024
+        for: 2m
+        labels: { severity: warning, category: saturation, service: demo-app }
+        annotations:
+          summary: "demo-app resident memory is {{ $value | humanize1024 }}B"
+          description: "Memory above 400 MiB (container limit 768 MiB); possible leak."
+
+      - alert: MemoryGrowing
+        expr: deriv(process_resident_memory_bytes{job="demo-app"}[5m]) > 512 * 1024
+        for: 3m
+        labels: { severity: warning, category: saturation, service: demo-app }
+        annotations:
+          summary: "demo-app memory growing at {{ $value | humanize1024 }}B/s"
+          description: "Sustained memory growth over 5 minutes; typical of a leak."
+
+      - alert: HighCpuUsage
+        expr: rate(process_cpu_seconds_total{job="demo-app"}[2m]) > 0.8
+        for: 2m
+        labels: { severity: warning, category: saturation, service: demo-app }
+        annotations:
+          summary: "demo-app is using {{ $value | humanizePercentage }} of a CPU core"
+          description: "Sustained CPU saturation slows the event loop and raises latency."
+
+      - alert: TooManyInFlightRequests
+        expr: http_requests_in_progress{job="demo-app"} > 20
+        for: 1m
+        labels: { severity: warning, category: saturation, service: demo-app }
+        annotations:
+          summary: "{{ $value }} requests in flight on demo-app"
+
+      # Ground truth for experiments: tells evaluators that a fault was injected on purpose.
+      # The RCA engine must not use this alert as an input feature.
+      - alert: ChaosInjectionActive
+        expr: sum by (service, mode) (chaos_injection_active{job="demo-app"}) > 0
+        labels: { severity: info, category: experiment, service: demo-app, ground_truth: "true" }
+        annotations:
+          summary: "Failure injection active: {{ $labels.mode }}={{ $value }}"
+
+  - name: hosts.alerts
+    rules:
+      - alert: HostHighCpu
+        expr: 1 - avg by (host) (rate(node_cpu_seconds_total{mode="idle"}[5m])) > 0.85
+        for: 5m
+        labels: { severity: warning, category: saturation, service: host }
+        annotations:
+          summary: "{{ $labels.host }} CPU at {{ $value | humanizePercentage }}"
+
+      - alert: HostHighMemory
+        expr: 1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.9
+        for: 5m
+        labels: { severity: warning, category: saturation, service: host }
+        annotations:
+          summary: "{{ $labels.host }} memory at {{ $value | humanizePercentage }}"
+
+      - alert: HostDiskAlmostFull
+        expr: >
+          (node_filesystem_avail_bytes{mountpoint="/", fstype!~"tmpfs|overlay"}
+           / node_filesystem_size_bytes{mountpoint="/", fstype!~"tmpfs|overlay"}) < 0.15
+        for: 10m
+        labels: { severity: warning, category: saturation, service: host }
+        annotations:
+          summary: "{{ $labels.host }} root disk has {{ $value | humanizePercentage }} free"
+
+  - name: platform.alerts
+    rules:
+      - alert: JenkinsDown
+        expr: up{job="jenkins"} == 0
+        for: 5m
+        labels: { severity: warning, category: ci, service: jenkins }
+        annotations:
+          summary: "Jenkins is unreachable from Prometheus"
+
+      - alert: MonitoringTargetDown
+        expr: up{job=~"loki|alertmanager|grafana|cadvisor"} == 0
+        for: 5m
+        labels: { severity: warning, category: availability, service: monitoring }
+        annotations:
+          summary: "Monitoring component {{ $labels.job }} is down"

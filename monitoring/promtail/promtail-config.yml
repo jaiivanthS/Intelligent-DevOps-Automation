@@ -1,0 +1,55 @@
+# Ships every container's stdout/stderr to Loki. demo-app writes JSON lines;
+# a few low-cardinality fields become labels so logs can be filtered fast
+# (e.g. {service="demo-app", level="ERROR"}). request_id and duration stay in the
+# log line and can be queried with `| json`.
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: warn
+
+positions:
+  filename: /var/lib/promtail/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 10s
+    relabel_configs:
+      - source_labels: [__meta_docker_container_name]
+        regex: "/(.*)"
+        target_label: container
+      - source_labels: [__meta_docker_container_label_com_docker_compose_project]
+        target_label: compose_project
+      # Label set on demo-app in deploy/app/docker-compose.yml
+      - source_labels: [__meta_docker_container_label_platform_service]
+        target_label: service
+      - source_labels: [__meta_docker_container_log_stream]
+        target_label: stream
+    pipeline_stages:
+      - match:
+          selector: '{container="demo-app"}'
+          stages:
+            - json:
+                expressions:
+                  ts: ts
+                  level: level
+                  event: event
+                  status: status
+                  version: version
+            - labels:
+                level:
+                event:
+                version:
+            - timestamp:
+                source: ts
+                format: RFC3339Nano
+            # Status class (2xx/4xx/5xx) as a label; the exact code stays in the line.
+            - template:
+                source: status_class
+                template: '{{ if .status }}{{ printf "%.1s" .status }}xx{{ end }}'
+            - labels:
+                status_class:

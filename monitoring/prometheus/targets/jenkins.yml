@@ -1,0 +1,5 @@
+# Jenkins host (fixed private IP from infra/terraform/compute.tf). setup.sh rewrites
+# this from /etc/devops-platform.env when it is available.
+- targets: ["10.20.1.10:8080"]
+  labels:
+    host: jenkins-host

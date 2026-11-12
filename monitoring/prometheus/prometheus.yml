@@ -1,0 +1,62 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    platform: devops-platform
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  # The application under management (same Docker network: devops-net).
+  - job_name: demo-app
+    scrape_interval: 10s
+    static_configs:
+      - targets: ["demo-app:8000"]
+        labels:
+          service: demo-app
+
+  # Host metrics from node-exporter. It runs on the host network of each EC2 instance
+  # (installed by the Terraform bootstrap).
+  - job_name: node
+    static_configs:
+      - targets: ["host.docker.internal:9100"]
+        labels:
+          host: app-host
+    file_sd_configs:
+      - files: ["/etc/prometheus/targets/node-*.yml"]
+
+  # Per-container CPU/memory (detects the memory-leak and CPU-burn failure modes).
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+    metric_relabel_configs:
+      # Keep only named containers; drop cgroup slices to limit cardinality.
+      - source_labels: [name]
+        regex: ""
+        action: drop
+
+  # Jenkins controller (prometheus plugin), via the fixed private IP from Terraform.
+  - job_name: jenkins
+    metrics_path: /prometheus/
+    file_sd_configs:
+      - files: ["/etc/prometheus/targets/jenkins.yml"]
+
+  # The monitoring stack itself.
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+  - job_name: alertmanager
+    static_configs:
+      - targets: ["alertmanager:9093"]
+  - job_name: loki
+    static_configs:
+      - targets: ["loki:3100"]
+  - job_name: grafana
+    static_configs:
+      - targets: ["grafana:3000"]

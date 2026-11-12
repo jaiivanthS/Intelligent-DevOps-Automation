@@ -24,7 +24,9 @@ services:
         max-size: "10m"
         max-file: "3"
 
-# Shared network so the monitoring stack (step 5) can scrape the app by name.
+# Shared network so the monitoring stack can scrape the app by name.
+# Created by appctl.sh / monitoring/setup.sh if it doesn't exist yet.
 networks:
   default:
     name: devops-net
+    external: true

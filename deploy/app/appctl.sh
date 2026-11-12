@@ -52,6 +52,7 @@ run_image() {
   env="${env:-production}"
   printf 'IMAGE=%s\nAPP_ENV=%s\n' "$image" "$env" > .env
   write_state app_env "$env"
+  docker network inspect devops-net >/dev/null 2>&1 || docker network create devops-net >/dev/null
   # Explicit && chain: `set -e` is suspended when this function is used in an `if`.
   docker compose pull "$SERVICE" \
     && docker compose up -d --wait --wait-timeout "$WAIT_TIMEOUT" "$SERVICE"

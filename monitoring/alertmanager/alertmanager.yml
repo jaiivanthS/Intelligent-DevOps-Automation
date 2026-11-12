@@ -1,0 +1,25 @@
+# Every alert goes to the platform's incident collector (step 6), which turns
+# alerts into incidents, attaches logs and metrics as evidence, and runs RCA.
+route:
+  receiver: platform
+  group_by: [alertname, service]
+  group_wait: 10s
+  group_interval: 1m
+  repeat_interval: 1h
+
+receivers:
+  - name: platform
+    webhook_configs:
+      - url: http://platform-api:8000/api/alerts/alertmanager
+        send_resolved: true
+        max_alerts: 50
+
+inhibit_rules:
+  # If the app is completely down, symptom alerts for the same service are noise.
+  - source_matchers: [alertname="DemoAppDown"]
+    target_matchers: [service="demo-app", alertname!="DemoAppDown"]
+    equal: [service]
+  # A dependency outage explains the error-rate alert it causes.
+  - source_matchers: [alertname="DependencyDown"]
+    target_matchers: [alertname="HighErrorRate"]
+    equal: [service]
