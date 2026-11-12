@@ -11,12 +11,31 @@ import {
 import type { Point, Result } from "./api";
 import { tone } from "./format";
 
+/** "/02 System status" -> lime "/02" + text; plain strings get a lime "//" prefix. */
+function CardTitle({ title }: { title: ReactNode }) {
+  if (typeof title !== "string") return <>{title}</>;
+  const m = /^(\/\d+)\s+(.*)$/.exec(title);
+  return m ? (
+    <>
+      <span className="pre">{m[1]}</span>
+      {m[2]}
+    </>
+  ) : (
+    <>
+      <span className="pre">//</span>
+      {title}
+    </>
+  );
+}
+
 export function Card(props: { title?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <section className={`card ${props.className ?? ""}`}>
       {(props.title || props.actions) && (
         <header className="card-head">
-          <h2>{props.title}</h2>
+          <h2>
+            <CardTitle title={props.title} />
+          </h2>
           <div className="card-actions">{props.actions}</div>
         </header>
       )}
@@ -74,34 +93,53 @@ export function TimeChart(props: {
   const data = (props.points ?? []).map(([t, v]) => ({ t: t * 1000, v }));
   if (!data.length) return <Empty>No data in this time range.</Empty>;
   const f = props.format ?? ((v: number) => v.toFixed(2));
-  const color = props.color ?? "var(--accent)";
-  const gradientId = `g${Math.abs(hash(color + (props.points?.length ?? 0)))}`;
+  const color = props.color ?? "#c8ff1e";
+  const id = Math.abs(hash(color + (props.points?.length ?? 0) + (props.height ?? 0)));
   return (
-    <ResponsiveContainer width="100%" height={props.height ?? 160}>
-      <AreaChart data={data} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+    <ResponsiveContainer width="100%" height={props.height ?? 170}>
+      <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
         <defs>
-          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={0.35} />
-            <stop offset="100%" stopColor={color} stopOpacity={0.02} />
+          <linearGradient id={`g${id}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity={0.32} />
+            <stop offset="100%" stopColor={color} stopOpacity={0} />
           </linearGradient>
+          <filter id={`glow${id}`} x="-10%" y="-30%" width="120%" height="160%">
+            <feGaussianBlur stdDeviation="2.2" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
         </defs>
-        <CartesianGrid stroke="var(--grid)" vertical={false} />
+        <CartesianGrid stroke="#1a1e15" strokeDasharray="2 4" />
         <XAxis
           dataKey="t"
           type="number"
           domain={["dataMin", "dataMax"]}
           tickFormatter={(t: number) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-          stroke="var(--muted)"
-          fontSize={11}
+          stroke="#4d5644"
+          tick={{ fill: "#7f8a72", fontSize: 10, fontFamily: "JetBrains Mono" }}
           minTickGap={40}
         />
-        <YAxis tickFormatter={f} stroke="var(--muted)" fontSize={11} width={64} />
+        <YAxis tickFormatter={f} stroke="#4d5644" tick={{ fill: "#7f8a72", fontSize: 10, fontFamily: "JetBrains Mono" }} width={64} />
         <Tooltip
           labelFormatter={(t) => new Date(Number(t)).toLocaleTimeString()}
           formatter={(v) => [f(Number(v)), "value"]}
-          contentStyle={{ background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 8 }}
+          cursor={{ stroke: color, strokeDasharray: "3 3" }}
+          contentStyle={{ background: "#060706", border: `1px solid ${color}`, borderRadius: 0, fontFamily: "JetBrains Mono", fontSize: 11 }}
+          labelStyle={{ color: "#7f8a72" }}
+          itemStyle={{ color }}
         />
-        <Area type="monotone" dataKey="v" stroke={color} strokeWidth={2} fill={`url(#${gradientId})`} isAnimationActive={false} />
+        <Area
+          type="monotone"
+          dataKey="v"
+          stroke={color}
+          strokeWidth={2}
+          fill={`url(#g${id})`}
+          filter={`url(#glow${id})`}
+          animationDuration={900}
+          activeDot={{ r: 4, fill: color, stroke: "#000" }}
+        />
       </AreaChart>
     </ResponsiveContainer>
   );

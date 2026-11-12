@@ -4,6 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import type { ReleaseState } from "../api";
 import { postJSON, usePoll } from "../api";
 import { Badge, Card, Empty, ErrorBanner } from "../components";
+import { PageHeader } from "../effects";
 import { fmt } from "../format";
 
 interface RecoveryAction {
@@ -68,7 +69,7 @@ export default function Recovery() {
 
   return (
     <>
-      <h1>Recovery</h1>
+      <PageHeader index={7} kicker="Human in the loop" title="Recovery" sub="Request → approve → execute in Jenkins → health-check. Nothing touches production without a named approver." />
       <ErrorBanner error={error} />
       {opts?.blockers.map((b) => (
         <div key={b} className="banner banner-warn">

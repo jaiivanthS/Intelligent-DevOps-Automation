@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { LogLine, Result } from "../api";
 import { usePoll } from "../api";
 import { Badge, Card, Empty, ErrorBanner, FromResult } from "../components";
+import { PageHeader } from "../effects";
 
 const LEVELS = ["ERROR", "WARNING", "INFO"];
 const EVENTS = ["", "http_request", "chaos_error", "dependency_error", "chaos_configured", "startup"];
@@ -23,7 +24,7 @@ export default function Logs() {
 
   return (
     <>
-      <h1>Logs</h1>
+      <PageHeader index={5} kicker="Loki stream" title="Logs" sub="Structured JSON logs from every container. Filters compile to validated LogQL." />
       <ErrorBanner error={error} />
       <Card>
         <form

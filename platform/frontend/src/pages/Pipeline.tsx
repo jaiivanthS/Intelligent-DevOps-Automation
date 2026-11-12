@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Build, PlatformEvent, Result } from "../api";
 import { usePoll } from "../api";
 import { Badge, Card, Empty, ErrorBanner, FromResult } from "../components";
+import { PageHeader } from "../effects";
 import { fmt } from "../format";
 
 interface BuildsResponse extends Result<Build[]> {
@@ -23,7 +24,7 @@ export default function Pipeline({ jenkinsUrl }: { jenkinsUrl: string | null }) 
 
   return (
     <>
-      <h1>Pipeline</h1>
+      <PageHeader index={2} kicker="CI/CD engine" title="Pipeline" sub="Every commit: tested, scanned, containerised, approved, deployed and smoke-tested." />
       <ErrorBanner error={error} />
       <div className="grid-sidebar">
         <Card

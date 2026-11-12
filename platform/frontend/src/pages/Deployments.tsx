@@ -1,6 +1,7 @@
 import type { PlatformEvent, ReleaseRecord, ReleaseState, Result } from "../api";
 import { usePoll } from "../api";
 import { Badge, Card, Empty, ErrorBanner, FromResult } from "../components";
+import { PageHeader } from "../effects";
 import { fmt } from "../format";
 
 interface DeploymentsData {
@@ -18,7 +19,7 @@ export default function Deployments() {
 
   return (
     <>
-      <h1>Deployments</h1>
+      <PageHeader index={3} kicker="Release control" title="Deployments" sub="Immutable images, promoted only after post-deploy smoke tests. Full audit trail from the app host." />
       <ErrorBanner error={error} />
       <div className="grid-2">
         <Card title="Environment">

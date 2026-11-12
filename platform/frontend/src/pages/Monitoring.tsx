@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Point, Result } from "../api";
 import { usePoll } from "../api";
 import { Badge, Card, Empty, ErrorBanner, FromResult, TimeChart, Unavailable } from "../components";
+import { PageHeader } from "../effects";
 import { fmt } from "../format";
 
 interface MonitoringData {
@@ -13,12 +14,12 @@ interface MonitoringData {
 
 const RANGES = [15, 60, 360, 1440];
 const CHARTS: { key: string; title: string; format: (v: number) => string; color: string }[] = [
-  { key: "request_rate", title: "Request rate (req/s)", format: (v) => v.toFixed(2), color: "#0f766e" },
-  { key: "error_ratio", title: "Error ratio (5xx)", format: (v) => fmt.pct(v), color: "#dc2626" },
-  { key: "latency_p95", title: "p95 latency", format: (v) => fmt.ms(v), color: "#d97706" },
-  { key: "memory_rss_bytes", title: "Memory (RSS)", format: (v) => fmt.bytes(v), color: "#7c3aed" },
-  { key: "cpu_cores", title: "CPU (cores)", format: (v) => v.toFixed(2), color: "#2563eb" },
-  { key: "dependency_up", title: "inventory-db reachable (1 = up)", format: (v) => v.toFixed(0), color: "#059669" },
+  { key: "request_rate", title: "Request rate (req/s)", format: (v) => v.toFixed(2), color: "#c8ff1e" },
+  { key: "error_ratio", title: "Error ratio (5xx)", format: (v) => fmt.pct(v), color: "#ff3d57" },
+  { key: "latency_p95", title: "p95 latency", format: (v) => fmt.ms(v), color: "#ffb21e" },
+  { key: "memory_rss_bytes", title: "Memory (RSS)", format: (v) => fmt.bytes(v), color: "#4de8ff" },
+  { key: "cpu_cores", title: "CPU (cores)", format: (v) => v.toFixed(2), color: "#c8ff1e" },
+  { key: "dependency_up", title: "inventory-db reachable", format: (v) => v.toFixed(0), color: "#a6e000" },
 ];
 
 export default function Monitoring() {
@@ -27,8 +28,7 @@ export default function Monitoring() {
 
   return (
     <>
-      <div className="page-head">
-        <h1>Monitoring</h1>
+      <PageHeader index={4} kicker="Telemetry" title="Monitoring" sub="Golden signals from Prometheus, live alerts and scrape-target health.">
         <div className="segmented">
           {RANGES.map((m) => (
             <button key={m} className={m === minutes ? "active" : ""} onClick={() => setMinutes(m)}>
@@ -36,7 +36,7 @@ export default function Monitoring() {
             </button>
           ))}
         </div>
-      </div>
+      </PageHeader>
       <ErrorBanner error={error} />
       <div className="grid-3">
         {CHARTS.map((c) => {

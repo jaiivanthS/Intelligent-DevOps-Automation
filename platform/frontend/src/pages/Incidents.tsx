@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import type { Incident, IncidentSummary } from "../api";
 import { postJSON, usePoll } from "../api";
 import { Badge, Card, Empty, ErrorBanner, TimeChart } from "../components";
+import { PageHeader } from "../effects";
 import { fmt } from "../format";
 
 const METRICS: { key: string; label: string; format: (v: number) => string }[] = [
@@ -26,8 +27,7 @@ export default function Incidents() {
 
   return (
     <>
-      <div className="page-head">
-        <h1>Incidents</h1>
+      <PageHeader index={6} kicker="Detect · diagnose" title="Incidents" sub="Alerts correlated into incidents, evidence captured automatically, causes ranked by explainable AI.">
         <div className="segmented">
           {(["active", "all"] as const).map((f) => (
             <button key={f} className={f === filter ? "active" : ""} onClick={() => setFilter(f)}>
@@ -35,7 +35,7 @@ export default function Incidents() {
             </button>
           ))}
         </div>
-      </div>
+      </PageHeader>
       <ErrorBanner error={error} />
       <div className="grid-sidebar">
         <Card title="Incidents">
