@@ -36,7 +36,10 @@ def handler(request: httpx.Request) -> httpx.Response:
         if path == "/api/v1/query_range":
             if "status=~" in q:  # error ratio climbs during the incident
                 return httpx.Response(200, json=_matrix([0, 0, 0, 0.3, 0.5, 0.6]))
-            return httpx.Response(200, json=_matrix([1, 1, 1, 1, 1, 1]))
+            # everything else stays at a plausible, flat level
+            flat = (0.1 if "cpu_seconds" in q else 9e7 if "resident_memory" in q
+                    else 0.05 if "histogram_quantile" in q else 2 if "in_progress" in q else 1)
+            return httpx.Response(200, json=_matrix([flat] * 6))
         if path == "/api/v1/targets":
             return httpx.Response(200, json={"status": "success", "data": {"activeTargets": [
                 {"labels": {"job": "demo-app", "instance": "demo-app:8000"}, "health": "up",

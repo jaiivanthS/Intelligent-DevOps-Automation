@@ -10,7 +10,7 @@ Each step is committed and pushed to GitHub when it is complete.
 | 4 | Deployment & smoke tests | Deploy over SSH with Docker Compose, smoke tests, approval gate, auto-rollback on smoke failure, status webhook | ✅ Done |
 | 5 | Monitoring | Prometheus, Grafana (provisioned dashboards), Loki + Promtail, alert rules | ✅ Done |
 | 6 | Platform website | FastAPI backend (Jenkins/Prometheus/Loki integration, incident collector) + React UI (6 modules) | ✅ Done |
-| 7 | AI root-cause analysis | Rule-based baseline, Isolation Forest, XGBoost/Random Forest, RCAEval + synthetic evaluation | ⏳ |
+| 7 | AI root-cause analysis | Rule-based baseline, Isolation Forest, XGBoost/Random Forest, RCAEval + synthetic evaluation | ✅ Done (synthetic evaluated; live and RCAEval runs pending deployment/download) |
 | 8 | Approval-based recovery & docs | Operator-approved rollback/restart, post-recovery health check, demo script, report | ⏳ |
 
 Principles: DevOps automation first, AI advisory only (an operator approves

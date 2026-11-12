@@ -29,7 +29,7 @@ Terraform provisions the infrastructure; Jenkins executes delivery pipelines.
 | `monitoring/` | Prometheus, Alertmanager, Grafana, Loki, Promtail, cAdvisor, alert rules, dashboards ([guide](monitoring/README.md)) | ✅ Step 5 |
 | `platform/backend/` | FastAPI platform API + incident collector ([guide](platform/README.md)) | ✅ Step 6 |
 | `platform/frontend/` | React website: Dashboard, Pipeline, Deployments, Monitoring, Logs, Incidents, Recovery | ✅ Step 6 |
-| `rca/` | Root-cause analysis models and evaluation | Step 7 |
+| `rca/` | Explainable RCA engine: rules baseline, Random Forest, Isolation Forest, evaluations ([guide](rca/README.md)) | ✅ Step 7 |
 | `docs/` | Roadmap, setup guide, report material | ongoing |
 
 See [docs/roadmap.md](docs/roadmap.md) for the step-by-step plan.

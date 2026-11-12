@@ -222,6 +222,8 @@ pre.log {
 .rca-cause { font-size: 20px; font-weight: 600; }
 .rca-conf { background: var(--accent-soft); color: var(--accent); padding: 4px 10px; border-radius: 999px; font-weight: 600; }
 .ranking { padding-left: 20px; }
-.ranking li { display: grid; grid-template-columns: 180px 1fr 48px; gap: 10px; align-items: center; margin: 4px 0; }
+.ranking li { display: grid; grid-template-columns: 220px 1fr 48px; gap: 10px; align-items: center; margin: 4px 0; }
+.rca-meta { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; margin: 12px 0 6px;
+  background: var(--panel-2); border-radius: 8px; font-size: 13px; }
 .bar { height: 8px; background: var(--grid); border-radius: 4px; overflow: hidden; }
 .bar span { display: block; height: 100%; background: var(--accent); }

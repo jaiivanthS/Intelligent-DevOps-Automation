@@ -7,7 +7,9 @@ x-logging: &logging
 
 services:
   platform-api:
-    build: ./backend
+    build:
+      context: ..                       # repository root: the image also installs ../rca
+      dockerfile: platform/backend/Dockerfile
     image: devops-platform/platform-api:local
     container_name: platform-api
     restart: unless-stopped

@@ -32,7 +32,18 @@ from .clients import (
 )
 from .config import Settings, get_settings
 from .db import Database, dumps, utcnow
-from .incidents import EVIDENCE_QUERIES, collect_evidence, ingest_alertmanager, set_status
+from .incidents import (
+    EVIDENCE_QUERIES,
+    collect_evidence,
+    ingest_alertmanager,
+    run_rca,
+    set_status,
+)
+
+try:  # RCA is optional: the platform runs without the rca_engine package.
+    from rca_engine import RCAEngine
+except ImportError:  # pragma: no cover
+    RCAEngine = None
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("platform")
@@ -60,6 +71,11 @@ class Context:
         self.am = Alertmanager(http, settings.alertmanager_url)
         self.app = App(http, settings.app_url)
         self.state = ReleaseState(settings.app_state_dir)
+        self.rca = RCAEngine.load(settings.rca_model_path) if RCAEngine else None
+
+    async def evidence(self, incident_id: int) -> dict[str, Any]:
+        return await collect_evidence(self.db, incident_id, self.prom, self.loki, self.state,
+                                      self.settings.service_name, self.rca)
 
 
 async def attempt(coro: Awaitable[Any]) -> dict[str, Any]:
@@ -122,6 +138,7 @@ def create_app(settings: Settings | None = None,
             "loki": c.loki.configured, "alertmanager": c.am.configured,
             "app": c.app.configured, "release_state": c.state.configured,
             "jenkins_url": settings.jenkins_url or None,
+            "rca": c.rca.name if c.rca else None,
         }
 
     # ------------------------------------------------------------------ ingest
@@ -143,8 +160,7 @@ def create_app(settings: Settings | None = None,
         opened = ingest_alertmanager(c.db, payload, settings.service_name)
         for incident_id in opened:
             log.info("incident %s opened", incident_id)
-            background.add_task(collect_evidence, c.db, incident_id, c.prom, c.loki, c.state,
-                                settings.service_name)
+            background.add_task(c.evidence, incident_id)  # evidence, then RCA
         return {"received": len(payload["alerts"]), "opened_incidents": opened}
 
     # --------------------------------------------------------------- dashboard
@@ -270,6 +286,18 @@ def create_app(settings: Settings | None = None,
             "annotations FROM alerts WHERE incident_id = ? ORDER BY id", (incident_id,))
         return inc
 
+    # Registered before the generic /{action} route, which would otherwise capture "rca".
+    @app.post("/api/incidents/{incident_id}/rca")
+    def rerun_rca(incident_id: int, c: Context = Depends(ctx)) -> dict[str, Any]:
+        if c.rca is None:
+            raise HTTPException(503, "RCA engine not installed")
+        if c.db.one("SELECT id FROM incidents WHERE id = ?", (incident_id,)) is None:
+            raise HTTPException(404, "incident not found")
+        result = run_rca(c.db, incident_id, c.rca)
+        if result is None:
+            raise HTTPException(409, "no evidence collected for this incident yet")
+        return result
+
     @app.post("/api/incidents/{incident_id}/{action}")
     def incident_action(incident_id: int, action: Literal["acknowledge", "resolve", "reopen"],
                         body: StatusChange | None = None,
@@ -284,8 +312,7 @@ def create_app(settings: Settings | None = None,
     async def refresh_evidence(incident_id: int, c: Context = Depends(ctx)) -> dict[str, Any]:
         if c.db.one("SELECT id FROM incidents WHERE id = ?", (incident_id,)) is None:
             raise HTTPException(404, "incident not found")
-        return await collect_evidence(c.db, incident_id, c.prom, c.loki, c.state,
-                                      settings.service_name)
+        return await c.evidence(incident_id)
 
     @app.get("/api/events")
     def events(limit: int = Query(50, ge=1, le=500), c: Context = Depends(ctx)):

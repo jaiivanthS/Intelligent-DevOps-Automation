@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rca-engine"
+version = "1.0.0"
+description = "Explainable root-cause analysis for incidents of the DevOps automation platform"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy==2.5.4",
+  "scikit-learn==1.9.1",
+  "joblib==1.6.0",
+]
+
+[project.optional-dependencies]
+benchmark = ["pandas==3.1.1", "pyarrow"]   # RCAEval adapter only
+xgboost = ["xgboost==3.4.1"]               # optional extra model in the comparison
+dev = ["pytest==8.3.4", "ruff==0.8.4"]
+
+[tool.setuptools.packages.find]
+include = ["rca_engine*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 110  # long human-readable evidence strings
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S"]
+ignore = ["S311"]  # synthetic data generation uses non-crypto RNGs by design
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+"rca_engine/model.py" = ["S301"]  # joblib loads only the model file we trained ourselves

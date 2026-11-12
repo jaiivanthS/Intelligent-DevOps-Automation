@@ -1,3 +1,7 @@
 fastapi==0.162.5
 uvicorn[standard]==0.54.0
 httpx==0.28.1
+# RCA engine (installed from ../../rca); pinned here too so pip-audit covers them
+numpy==2.5.4
+scikit-learn==1.9.1
+joblib==1.6.0

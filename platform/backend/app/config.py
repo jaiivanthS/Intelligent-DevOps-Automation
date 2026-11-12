@@ -23,6 +23,8 @@ class Settings:
     # If set, POST /api/events/* and /api/alerts/* require header X-Platform-Token.
     ingest_token: str = ""
     upstream_timeout: float = 5.0
+    # Trained RCA model (rca_engine). Missing file -> rule-based baseline.
+    rca_model_path: str = ""
     # A new alert joins an open incident of the same service if one exists.
     cors_origins: tuple[str, ...] = ()
 
@@ -43,5 +45,6 @@ def get_settings() -> Settings:
         service_name=env("SERVICE_NAME", "demo-app"),
         ingest_token=env("INGEST_TOKEN", ""),
         upstream_timeout=float(env("UPSTREAM_TIMEOUT", "5")),
+        rca_model_path=env("RCA_MODEL_PATH", ""),
         cors_origins=tuple(o for o in env("CORS_ORIGINS", "").split(",") if o),
     )

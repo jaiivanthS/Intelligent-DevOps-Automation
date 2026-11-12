@@ -88,13 +88,22 @@ export interface Incident extends IncidentSummary {
     release_history: ReleaseRecord[];
   } | null;
   rca: {
-    top_cause?: string;
-    confidence?: number;
-    ranking?: { cause: string; score: number }[];
-    evidence?: string[];
-    suggested_checks?: string[];
-    suggested_action?: string;
-    model?: string;
+    top_cause: string;
+    top_cause_title: string;
+    description: string;
+    confidence: number;
+    ranking: { cause: string; title: string; score: number }[];
+    evidence: string[];
+    suggested_checks: string[];
+    suggested_action: "rollback" | "restart" | "none";
+    model: string;
+    analyzed_at: string;
+    rule_based: { top_cause: string; ranking: { cause: string; score: number }[] };
+    anomaly: {
+      score: number;
+      is_anomalous: boolean;
+      top_deviations: { feature: string; z: number; value: number }[];
+    } | null;
   } | null;
   ground_truth: { mode: string; summary: string; starts_at: string }[] | null;
   notes: { ts: string; status: string; note: string }[] | null;

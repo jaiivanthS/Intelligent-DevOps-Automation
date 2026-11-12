@@ -66,6 +66,83 @@ export default function Incidents() {
   );
 }
 
+const ACTION_LABEL: Record<string, string> = {
+  rollback: "Roll back to the last good release",
+  restart: "Restart the service",
+  none: "No automated action; investigate using the checks above",
+};
+
+function RcaPanel({ rca }: { rca: NonNullable<Incident["rca"]> }) {
+  const agree = rca.rule_based.top_cause === rca.top_cause;
+  return (
+    <div className="rca">
+      <div className="rca-top">
+        <div>
+          <div className="muted small">Most probable cause</div>
+          <div className="rca-cause">{rca.top_cause_title}</div>
+          <div className="muted small">{rca.description}</div>
+        </div>
+        <div className="rca-conf">{fmt.pct(rca.confidence, 0)} confidence</div>
+      </div>
+      <ol className="ranking">
+        {rca.ranking.map((r) => (
+          <li key={r.cause}>
+            <span>{r.title}</span>
+            <span className="bar">
+              <span style={{ width: `${Math.round(r.score * 100)}%` }} />
+            </span>
+            <span className="mono small">{fmt.pct(r.score, 0)}</span>
+          </li>
+        ))}
+      </ol>
+      {rca.evidence.length > 0 && (
+        <>
+          <h3>Why</h3>
+          <ul>
+            {rca.evidence.map((e) => (
+              <li key={e}>{e}</li>
+            ))}
+          </ul>
+        </>
+      )}
+      <h3>Suggested checks</h3>
+      <ul>
+        {rca.suggested_checks.map((c) => (
+          <li key={c}>{c}</li>
+        ))}
+      </ul>
+      <p>
+        Suggested recovery: <strong>{ACTION_LABEL[rca.suggested_action] ?? rca.suggested_action}</strong>
+        {rca.suggested_action !== "none" && (
+          <>
+            {" "}
+            · <Link to="/recovery">Recovery →</Link>
+          </>
+        )}
+      </p>
+      <div className="rca-meta">
+        <span>
+          Rule-based baseline: <strong>{rca.rule_based.top_cause.replace(/_/g, " ")}</strong>{" "}
+          <Badge value={agree ? "ok" : "warning"} label={agree ? "agrees" : "disagrees"} />
+        </span>
+        {rca.anomaly && (
+          <span title={rca.anomaly.top_deviations.map((d) => `${d.feature}: z=${d.z}`).join("\n")}>
+            Anomaly score {rca.anomaly.score.toFixed(2)}{" "}
+            <Badge value={rca.anomaly.is_anomalous ? "warning" : "muted"} label={rca.anomaly.is_anomalous ? "anomalous" : "within normal range"} />
+            <span className="muted small">
+              {" "}
+              top deviations: {rca.anomaly.top_deviations.slice(0, 3).map((d) => d.feature).join(", ")}
+            </span>
+          </span>
+        )}
+      </div>
+      <p className="muted small">
+        {rca.model} · analysed {fmt.ago(rca.analyzed_at)}. Advisory only: recovery always requires operator approval.
+      </p>
+    </div>
+  );
+}
+
 function IncidentDetail({ id, onChange }: { id: number; onChange: () => void }) {
   const { data: inc, error, reload } = usePoll<Incident>(`/api/incidents/${id}`, 10_000);
   const [busy, setBusy] = useState<string | null>(null);
@@ -153,51 +230,15 @@ function IncidentDetail({ id, onChange }: { id: number; onChange: () => void }) 
         </table>
       </Card>
 
-      <Card title="Root cause analysis">
-        {inc.rca ? (
-          <div className="rca">
-            <div className="rca-top">
-              <div>
-                <div className="muted small">Most probable cause</div>
-                <div className="rca-cause">{inc.rca.top_cause}</div>
-              </div>
-              {inc.rca.confidence !== undefined && <div className="rca-conf">{fmt.pct(inc.rca.confidence, 0)} confidence</div>}
-            </div>
-            {inc.rca.ranking && (
-              <ol className="ranking">
-                {inc.rca.ranking.map((r) => (
-                  <li key={r.cause}>
-                    <span>{r.cause}</span>
-                    <span className="bar">
-                      <span style={{ width: `${Math.round(r.score * 100)}%` }} />
-                    </span>
-                    <span className="mono small">{fmt.pct(r.score, 0)}</span>
-                  </li>
-                ))}
-              </ol>
-            )}
-            {inc.rca.evidence?.length ? (
-              <>
-                <h3>Evidence</h3>
-                <ul>{inc.rca.evidence.map((e) => <li key={e}>{e}</li>)}</ul>
-              </>
-            ) : null}
-            {inc.rca.suggested_checks?.length ? (
-              <>
-                <h3>Suggested checks</h3>
-                <ul>{inc.rca.suggested_checks.map((c) => <li key={c}>{c}</li>)}</ul>
-              </>
-            ) : null}
-            {inc.rca.suggested_action && (
-              <p>
-                Suggested recovery: <strong>{inc.rca.suggested_action}</strong>. <Link to="/recovery">Recovery →</Link>
-              </p>
-            )}
-            <p className="muted small">Model: {inc.rca.model}. Recommendations are advisory; an operator approves any recovery action.</p>
-          </div>
-        ) : (
-          <Empty>No RCA result for this incident yet.</Empty>
-        )}
+      <Card
+        title="Root cause analysis"
+        actions={
+          <button disabled={!!busy || !inc.evidence} onClick={() => act("rca")}>
+            Re-run RCA
+          </button>
+        }
+      >
+        {inc.rca ? <RcaPanel rca={inc.rca} /> : <Empty>{inc.evidence ? "No RCA result yet." : "Waiting for evidence…"}</Empty>}
       </Card>
 
       <Card title={ev ? `Evidence (last ${ev.window_minutes} min, collected ${fmt.ago(ev.collected_at)})` : "Evidence"}>

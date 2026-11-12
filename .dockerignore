@@ -1,0 +1,15 @@
+# Used by images built with the repository root as context (platform-api).
+.git/
+**/.venv/
+**/node_modules/
+**/dist/
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/
+**/*.db
+**/*.db-*
+**/.env
+infra/terraform/.terraform/
+rca/models/
+rca/data/
+*.pdf

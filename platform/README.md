@@ -43,6 +43,11 @@ and never breaks the page.
 * `ChaosInjectionActive` alerts (`ground_truth="true"`) never open incidents and
   are never used as evidence. They are stored as **ground truth** to evaluate the
   RCA engine.
+* After the evidence is collected, the **RCA engine** ([rca/](../rca/README.md)) ranks
+  the probable causes and stores them. The result includes the confidence, a "why"
+  explanation, suggested checks, a suggested action, a comparison with the
+  rule-based baseline, and an anomaly score.
+  `POST /api/incidents/{id}/rca` re-runs it.
 
 ## Run on the app host
 

@@ -136,6 +136,19 @@ pipeline {
             }
           }
         }
+        stage('Platform & RCA tests') {
+          steps {
+            sh '''
+              python3 -m venv .venv-platform
+              . .venv-platform/bin/activate
+              pip install -q --upgrade pip
+              pip install -q -r platform/backend/requirements-dev.txt -e "rca[dev]"
+              (cd rca && pytest -p no:cacheprovider --junitxml="$WORKSPACE/$REPORTS/junit-rca.xml")
+              (cd platform/backend && pytest -p no:cacheprovider --junitxml="$WORKSPACE/$REPORTS/junit-platform.xml")
+              pip-audit -r platform/backend/requirements.txt --progress-spinner off
+            '''
+          }
+        }
         stage('Dependency audit (pip-audit)') {
           steps {
             dir(env.APP_DIR) {

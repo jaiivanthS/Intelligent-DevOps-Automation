@@ -187,7 +187,8 @@ def _summarise(points: list[list[float]]) -> dict[str, float | None]:
 
 
 async def collect_evidence(db: Database, incident_id: int, prom: Prometheus, loki: Loki,
-                           state: ReleaseState, service: str) -> dict[str, Any]:
+                           state: ReleaseState, service: str, engine: Any = None
+                           ) -> dict[str, Any]:
     evidence: dict[str, Any] = {"collected_at": utcnow(), "window_minutes": EVIDENCE_WINDOW_MIN}
 
     metrics: dict[str, Any] = {}
@@ -230,4 +231,26 @@ async def collect_evidence(db: Database, incident_id: int, prom: Prometheus, lok
     with db.tx() as c:
         c.execute("UPDATE incidents SET evidence = ? WHERE id = ?", (dumps(evidence), incident_id))
     log.info("evidence collected for incident %s", incident_id)
+    if engine is not None:
+        run_rca(db, incident_id, engine)
     return evidence
+
+
+def run_rca(db: Database, incident_id: int, engine: Any) -> dict[str, Any] | None:
+    """Analyse the stored evidence with the RCA engine and save the result."""
+    inc = db.one("SELECT evidence FROM incidents WHERE id = ?", (incident_id,))
+    if inc is None or not inc["evidence"]:
+        return None
+    alerts = db.query("SELECT alertname, severity, category, labels FROM alerts "
+                      "WHERE incident_id = ? AND ground_truth = 0", (incident_id,))
+    try:
+        result = engine.analyze(inc["evidence"], alerts)
+    except Exception:  # RCA is advisory: a failure must never break incident handling
+        log.exception("RCA failed for incident %s", incident_id)
+        return None
+    result["analyzed_at"] = utcnow()
+    with db.tx() as c:
+        c.execute("UPDATE incidents SET rca = ? WHERE id = ?", (dumps(result), incident_id))
+    log.info("RCA for incident %s: %s (%.0f%%)", incident_id, result["top_cause"],
+             100 * result["confidence"])
+    return result
