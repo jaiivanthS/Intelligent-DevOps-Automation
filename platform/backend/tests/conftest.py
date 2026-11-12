@@ -11,6 +11,7 @@ from app.config import Settings
 from app.main import create_app
 
 CALLS: list[httpx.Request] = []
+JENKINS_TRIGGER_FAILS = False
 
 
 def _vector(value):
@@ -59,6 +60,10 @@ def handler(request: httpx.Request) -> httpx.Response:
                                           "startsAt": "2026-01-01T00:00:00Z",
                                           "status": {"state": "active"}}])
     if host == "jenkins":
+        if request.method == "POST" and path == "/job/recovery/buildWithParameters":
+            if JENKINS_TRIGGER_FAILS:
+                return httpx.Response(500, text="boom")
+            return httpx.Response(201, headers={"Location": "http://jenkins/queue/item/77/"})
         if path == "/job/demo-app/api/json":
             return httpx.Response(200, json={"builds": [
                 {"number": 12, "building": True, "result": None, "timestamp": 1, "duration": 0,
@@ -93,6 +98,18 @@ def make_settings(tmp_path, **overrides) -> Settings:
                 app_state_dir=str(tmp_path / "state"))
     base.update(overrides)
     return Settings(**base)
+
+
+def write_state(tmp_path):
+    state = tmp_path / "state"
+    state.mkdir(exist_ok=True)
+    (state / "current_image").write_text("repo/demo-app:11-def\n")
+    (state / "last_good_image").write_text("repo/demo-app:10-aaa\n")
+    (state / "app_env").write_text("production\n")
+    (state / "releases.jsonl").write_text(
+        '{"action":"deploy","result":"success","image":"repo/demo-app:10-aaa"}\n'
+        '{"action":"promote","result":"success","image":"repo/demo-app:10-aaa"}\n'
+        '{"action":"deploy","result":"success","image":"repo/demo-app:11-def"}\n')
 
 
 @pytest.fixture

@@ -112,6 +112,23 @@ class Jenkins(Upstream):
                 "skipped": data.get("skipCount", 0), "duration_s": data.get("duration"),
                 "failures": failed[:50]}
 
+    @property
+    def can_trigger(self) -> bool:
+        return bool(self.base and self.auth and self.auth[1])
+
+    async def trigger(self, job: str, params: dict[str, str]) -> str | None:
+        """Queue a parameterised build. API-token auth needs no CSRF crumb.
+        Returns the queue item URL (Location header)."""
+        if not self.can_trigger:
+            raise UpstreamError("jenkins: JENKINS_URL/JENKINS_USER/JENKINS_TOKEN not configured")
+        try:
+            resp = await self.http.post(f"{self.base}/job/{job}/buildWithParameters",
+                                        data=params, auth=self.auth)
+            resp.raise_for_status()
+            return resp.headers.get("location")
+        except httpx.HTTPError as exc:
+            raise UpstreamError(f"jenkins: {exc.__class__.__name__}: {exc}") from exc
+
     async def log_tail(self, number: int, lines: int = 300) -> str:
         text = await self.get_text(f"/job/{self.job}/{number}/consoleText", auth=self.auth)
         return "\n".join(text.splitlines()[-lines:])

@@ -11,7 +11,12 @@ Each step is committed and pushed to GitHub when it is complete.
 | 5 | Monitoring | Prometheus, Grafana (provisioned dashboards), Loki + Promtail, alert rules | ✅ Done |
 | 6 | Platform website | FastAPI backend (Jenkins/Prometheus/Loki integration, incident collector) + React UI (6 modules) | ✅ Done |
 | 7 | AI root-cause analysis | Rule-based baseline, Isolation Forest, XGBoost/Random Forest, RCAEval + synthetic evaluation | ✅ Done (synthetic evaluated; live and RCAEval runs pending deployment/download) |
-| 8 | Approval-based recovery & docs | Operator-approved rollback/restart, post-recovery health check, demo script, report | ⏳ |
+| 8 | Approval-based recovery & docs | Operator-approved rollback/restart, post-recovery health check, demo script, report | ✅ Done |
+
+All steps are implemented and tested locally. The remaining work needs a running AWS
+deployment: a first real pipeline run, the live-demo RCA evaluation, screenshots and
+timings for the report. Follow [setup-guide.md](setup-guide.md), then
+[demo-script.md](demo-script.md).
 
 Principles: DevOps automation first, AI advisory only (an operator approves
 every recovery action), benchmark and live-demo results reported separately.

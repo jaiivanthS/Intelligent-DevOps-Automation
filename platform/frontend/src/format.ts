@@ -49,11 +49,11 @@ export const fmt = {
 /** Map any status/result/severity word to a badge tone. */
 export function tone(value: string | null | undefined): "good" | "bad" | "warn" | "info" | "muted" {
   const v = (value ?? "").toLowerCase();
-  if (["success", "passed", "up", "ready", "resolved", "promoted", "approved", "ok", "healthy"].includes(v))
+  if (["success", "passed", "up", "ready", "resolved", "promoted", "approved", "ok", "healthy", "succeeded"].includes(v))
     return "good";
-  if (["failure", "failed", "critical", "down", "error", "unhealthy", "aborted_by_failure"].includes(v))
+  if (["failure", "failed", "critical", "down", "error", "unhealthy", "aborted_by_failure", "timed_out"].includes(v))
     return "bad";
-  if (["warning", "unstable", "waiting", "acknowledged", "running", "in_progress", "started", "rollback"].includes(v))
+  if (["warning", "unstable", "waiting", "acknowledged", "running", "in_progress", "started", "rollback", "pending_approval"].includes(v))
     return "warn";
   if (["open", "info", "firing", "experiment"].includes(v)) return "info";
   return "muted";

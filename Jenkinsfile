@@ -39,7 +39,9 @@ def notifyPlatform(String event, String status, Map extra = [:]) {
   ] + extra
   writeJSON file: '.platform-event.json', json: payload
   sh(returnStatus: true, script: '''
-    curl -fsS -m 5 -X POST -H "Content-Type: application/json" \
+    set --
+    if [ -n "${PLATFORM_INGEST_TOKEN:-}" ]; then set -- -H "X-Platform-Token: $PLATFORM_INGEST_TOKEN"; fi
+    curl -fsS -m 5 -X POST -H "Content-Type: application/json" "$@" \
       --data @.platform-event.json "$PLATFORM_API_URL/api/events/jenkins" >/dev/null \
       || echo "platform notification failed (ignored)"
   ''')

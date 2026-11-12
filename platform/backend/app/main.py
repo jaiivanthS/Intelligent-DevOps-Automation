@@ -14,13 +14,14 @@ import hmac
 import logging
 from collections.abc import Awaitable
 from contextlib import asynccontextmanager
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import httpx
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
+from . import recovery
 from .clients import (
     Alertmanager,
     App,
@@ -97,6 +98,31 @@ class JenkinsEvent(BaseModel):
 
 class StatusChange(BaseModel):
     note: str | None = Field(default=None, max_length=2000)
+
+
+Name = Annotated[str, Field(min_length=2, max_length=80, pattern=r"^[\w .@'-]+$")]
+
+
+class RecoveryRequest(BaseModel):
+    action: Literal["rollback", "restart"]
+    reason: str = Field(min_length=3, max_length=2000)
+    requested_by: Name
+    target_image: str | None = Field(default=None, max_length=300)
+    incident_id: int | None = None
+
+
+class RecoveryDecision(BaseModel):
+    by: Name
+    note: str | None = Field(default=None, max_length=2000)
+    approval_token: str | None = Field(default=None, max_length=200)
+
+
+class RecoveryResult(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    status: Literal["succeeded", "failed"]
+    detail: str | None = Field(default=None, max_length=4000)
+    build: str | None = None
+    smoke_test: dict[str, Any] | None = None
 
 
 def create_app(settings: Settings | None = None,
@@ -317,6 +343,82 @@ def create_app(settings: Settings | None = None,
     @app.get("/api/events")
     def events(limit: int = Query(50, ge=1, le=500), c: Context = Depends(ctx)):
         return c.db.query("SELECT * FROM events ORDER BY id DESC LIMIT ?", (limit,))
+
+    # ---------------------------------------------------------------- recovery
+    def recovery_call(fn, *args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except recovery.RecoveryError as exc:
+            raise HTTPException(exc.status_code, str(exc)) from exc
+
+    @app.get("/api/recovery/options")
+    def recovery_options(c: Context = Depends(ctx)) -> dict[str, Any]:
+        result = recovery.options(c.db, c.state, c.jenkins.can_trigger)
+        result["approval_token_required"] = bool(settings.recovery_approval_token)
+        result["distinct_approver_required"] = settings.require_distinct_approver
+        return result
+
+    @app.get("/api/recovery/actions")
+    def recovery_actions(limit: int = Query(50, ge=1, le=500),
+                         c: Context = Depends(ctx)) -> list[dict[str, Any]]:
+        recovery.expire_stale(c.db)
+        return c.db.query("SELECT * FROM recovery_actions ORDER BY id DESC LIMIT ?", (limit,))
+
+    @app.get("/api/recovery/actions/{action_id}")
+    def recovery_action(action_id: int, c: Context = Depends(ctx)) -> dict[str, Any]:
+        recovery.expire_stale(c.db)
+        return recovery_call(recovery.get, c.db, action_id)
+
+    @app.post("/api/recovery/actions", status_code=201)
+    def request_recovery(req: RecoveryRequest, c: Context = Depends(ctx)) -> dict[str, Any]:
+        return recovery_call(recovery.create, c.db, c.state, action=req.action,
+                             target_image=req.target_image, incident_id=req.incident_id,
+                             reason=req.reason, requested_by=req.requested_by)
+
+    @app.post("/api/recovery/actions/{action_id}/reject")
+    def reject_recovery(action_id: int, d: RecoveryDecision,
+                        c: Context = Depends(ctx)) -> dict[str, Any]:
+        return recovery_call(recovery.decide, c.db, action_id, approve=False, by=d.by,
+                             note=d.note, require_distinct=False)
+
+    @app.post("/api/recovery/actions/{action_id}/approve")
+    async def approve_recovery(action_id: int, d: RecoveryDecision,
+                               c: Context = Depends(ctx)) -> dict[str, Any]:
+        if settings.recovery_approval_token and not hmac.compare_digest(
+                d.approval_token or "", settings.recovery_approval_token):
+            raise HTTPException(403, "invalid approval token")
+        if not c.jenkins.can_trigger:
+            raise HTTPException(503, "Jenkins is not configured; cannot execute recovery")
+        row = recovery_call(recovery.decide, c.db, action_id, approve=True, by=d.by,
+                            note=d.note, require_distinct=settings.require_distinct_approver)
+        try:
+            queue = await c.jenkins.trigger(settings.recovery_job, {
+                "ACTION": row["action"], "TARGET_IMAGE": row["target_image"] or "",
+                "REQUEST_ID": str(action_id), "INCIDENT_ID": str(row["incident_id"] or ""),
+                "APPROVED_BY": d.by})
+        except UpstreamError as exc:
+            return recovery.mark_failed(c.db, action_id, f"could not start Jenkins job: {exc}")
+        log.info("recovery %s approved by %s; Jenkins queued %s", action_id, d.by, queue)
+        return recovery.mark_running(c.db, action_id, queue)
+
+    @app.post("/api/recovery/actions/{action_id}/result",
+              dependencies=[Depends(require_ingest_token)])
+    async def recovery_result(action_id: int, res: RecoveryResult,
+                              c: Context = Depends(ctx)) -> dict[str, Any]:
+        """Called by the Jenkins recovery job when it finishes."""
+        row = recovery_call(recovery.record_result, c.db, action_id,
+                            succeeded=res.status == "succeeded", detail=res.detail,
+                            build=res.build, health={"smoke_test": res.smoke_test})
+        # Independent post-recovery check from the platform's side.
+        check = await attempt(c.app.info())
+        platform_check = {"checked_at": utcnow(), "reachable": check["ok"],
+                          "ready": bool(check.get("data", {}).get("ready")),
+                          "version": check.get("data", {}).get("version"),
+                          "error": check.get("error")}
+        if row["action"] == "rollback" and platform_check["version"]:
+            platform_check["version_matches_target"] = (
+                (row["target_image"] or "").endswith(":" + platform_check["version"]))
+        return recovery.merge_health(c.db, action_id, {"platform_check": platform_check})
 
     return app
 

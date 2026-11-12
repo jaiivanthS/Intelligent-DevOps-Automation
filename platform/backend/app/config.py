@@ -25,6 +25,11 @@ class Settings:
     upstream_timeout: float = 5.0
     # Trained RCA model (rca_engine). Missing file -> rule-based baseline.
     rca_model_path: str = ""
+    # Recovery: Jenkins job that executes approved actions; optional approval secret that
+    # approvers must enter; optionally forbid approving your own request (four-eyes).
+    recovery_job: str = "recovery"
+    recovery_approval_token: str = ""
+    require_distinct_approver: bool = False
     # A new alert joins an open incident of the same service if one exists.
     cors_origins: tuple[str, ...] = ()
 
@@ -46,5 +51,9 @@ def get_settings() -> Settings:
         ingest_token=env("INGEST_TOKEN", ""),
         upstream_timeout=float(env("UPSTREAM_TIMEOUT", "5")),
         rca_model_path=env("RCA_MODEL_PATH", ""),
+        recovery_job=env("RECOVERY_JOB", "recovery"),
+        recovery_approval_token=env("RECOVERY_APPROVAL_TOKEN", ""),
+        require_distinct_approver=env("REQUIRE_DISTINCT_APPROVER", "false").lower()
+        in {"1", "true", "yes"},
         cors_origins=tuple(o for o in env("CORS_ORIGINS", "").split(",") if o),
     )

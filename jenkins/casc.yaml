@@ -28,6 +28,8 @@ jenkins:
             value: "${APP_HOST:-}"
           - key: PLATFORM_API_URL
             value: "${PLATFORM_API_URL:-}"
+          - key: PLATFORM_INGEST_TOKEN
+            value: "${PLATFORM_INGEST_TOKEN:-}"
 
 credentials:
   system:
@@ -47,7 +49,7 @@ unclassified:
     url: "${JENKINS_URL}"
 
 jobs:
-  - script: >
+  - script: |
       pipelineJob('demo-app') {
         description('Build, test, scan and publish demo-app (Jenkinsfile in the repository root).')
         properties {
@@ -67,6 +69,32 @@ jobs:
               }
             }
             scriptPath('Jenkinsfile')
+            lightweight(true)
+          }
+        }
+      }
+  - script: |
+      pipelineJob('recovery') {
+        description('Executes operator-approved recovery actions requested in the platform UI. Do not run manually.')
+        properties {
+          disableConcurrentBuilds()
+        }
+        parameters {
+          choiceParam('ACTION', ['rollback', 'restart'], 'Approved action')
+          stringParam('TARGET_IMAGE', '', 'Image to roll back to (rollback only)')
+          stringParam('REQUEST_ID', '', 'Platform recovery request id')
+          stringParam('INCIDENT_ID', '', 'Related incident id (optional)')
+          stringParam('APPROVED_BY', '', 'Approver recorded by the platform')
+        }
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote { url('${GIT_REPO_URL}') }
+                branches('*/main')
+              }
+            }
+            scriptPath('jenkins/recovery.Jenkinsfile')
             lightweight(true)
           }
         }

@@ -25,7 +25,7 @@ React UI (nginx :8081) ──/api──▶ platform-api (FastAPI :8000) ──�
 | **Monitoring** | Request rate, error ratio, p95, memory, CPU and dependency charts (15 minutes to 24 hours), firing alerts, scrape-target health |
 | **Logs** | Loki search with filters for level, event type, time range and free text. The page shows the generated LogQL. |
 | **Incidents** | Correlated incidents with alerts, an evidence snapshot (metric baseline → now with sparklines, top error messages, deployments in the previous hour), RCA results (step 7) and experiment ground truth. Each incident can be acknowledged, resolved, reopened or have its evidence refreshed. |
-| **Recovery** | Rollback target, past rollbacks and restarts. Approval-based actions arrive in step 8. |
+| **Recovery** | Request a rollback or restart (with reason, optionally linked to an incident), an approval queue (approve or reject, optional token and four-eyes rule), live status, and a history showing smoke-test and platform health checks |
 
 Every upstream is optional. Anything unreachable shows **"unavailable"** in place
 and never breaks the page.
@@ -48,6 +48,30 @@ and never breaks the page.
   explanation, suggested checks, a suggested action, a comparison with the
   rule-based baseline, and an anomaly score.
   `POST /api/incidents/{id}/rca` re-runs it.
+
+## Approval-based recovery
+
+```
+request (name, reason) ─▶ pending_approval ─approve (name [+ token]) ─▶ Jenkins "recovery" job
+                              │                                            │ appctl rollback/restart
+                       reject / 30 min expiry                              │ smoke test (expects target version)
+                                                                           ▼
+                         succeeded | failed ◀── POST /result ── platform health and version check
+```
+
+* The platform never touches the app host itself. The approved action runs in the
+  Jenkins `recovery` job (`jenkins/recovery.Jenkinsfile`), which uses the same deploy key
+  and audit trail as deployments.
+* **Guardrails:**
+  * Only one action can be active at a time.
+  * Rollback targets must come from the release history, and Jenkins re-checks them against the ECR repository.
+  * Unapproved requests expire after 30 minutes, and lost runs time out after 20 minutes.
+* **Settings** (`.env`):
+  * `RECOVERY_APPROVAL_TOKEN`: a secret that approvers must enter
+  * `REQUIRE_DISTINCT_APPROVER=true`: the four-eyes rule
+  * `JENKINS_USER`/`JENKINS_TOKEN` need permission to build the `recovery` job
+* Every step is recorded on the action and appended to the linked incident's notes.
+  The incident's RCA links to a pre-filled request for its suggested action.
 
 ## Run on the app host
 
@@ -88,3 +112,7 @@ npm run dev                           # http://localhost:5173, proxies /api to :
 | `GET /api/incidents[?status=active]`, `GET /api/incidents/{id}` | Incidents |
 | `POST /api/incidents/{id}/acknowledge` \| `resolve` \| `reopen` \| `evidence/refresh` | Incident workflow |
 | `POST /api/events/jenkins`, `POST /api/alerts/alertmanager` | Ingest (optional `X-Platform-Token`) |
+| `POST /api/incidents/{id}/rca` | Re-run RCA |
+| `GET /api/recovery/options`, `GET /api/recovery/actions[/{id}]` | Recovery state and history |
+| `POST /api/recovery/actions` · `/{id}/approve` · `/{id}/reject` | Request and decide |
+| `POST /api/recovery/actions/{id}/result` | Jenkins callback (optional `X-Platform-Token`) |

@@ -72,7 +72,7 @@ const ACTION_LABEL: Record<string, string> = {
   none: "No automated action; investigate using the checks above",
 };
 
-function RcaPanel({ rca }: { rca: NonNullable<Incident["rca"]> }) {
+function RcaPanel({ rca, incidentId }: { rca: NonNullable<Incident["rca"]>; incidentId: number }) {
   const agree = rca.rule_based.top_cause === rca.top_cause;
   return (
     <div className="rca">
@@ -116,7 +116,7 @@ function RcaPanel({ rca }: { rca: NonNullable<Incident["rca"]> }) {
         {rca.suggested_action !== "none" && (
           <>
             {" "}
-            · <Link to="/recovery">Recovery →</Link>
+            · <Link to={`/recovery?incident=${incidentId}&action=${rca.suggested_action}`}>Request this recovery →</Link>
           </>
         )}
       </p>
@@ -238,7 +238,7 @@ function IncidentDetail({ id, onChange }: { id: number; onChange: () => void }) 
           </button>
         }
       >
-        {inc.rca ? <RcaPanel rca={inc.rca} /> : <Empty>{inc.evidence ? "No RCA result yet." : "Waiting for evidence…"}</Empty>}
+        {inc.rca ? <RcaPanel rca={inc.rca} incidentId={inc.id} /> : <Empty>{inc.evidence ? "No RCA result yet." : "Waiting for evidence…"}</Empty>}
       </Card>
 
       <Card title={ev ? `Evidence (last ${ev.window_minutes} min, collected ${fmt.ago(ev.collected_at)})` : "Evidence"}>

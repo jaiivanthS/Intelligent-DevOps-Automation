@@ -58,9 +58,36 @@ CREATE TABLE IF NOT EXISTS alerts (
     updated_at   TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_alerts_incident ON alerts (incident_id);
+
+-- Operator-approved recovery actions, executed by the Jenkins "recovery" job.
+-- status: pending_approval -> approved -> running -> succeeded | failed
+--         pending_approval -> rejected | expired ; running -> timed_out
+CREATE TABLE IF NOT EXISTS recovery_actions (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    incident_id   INTEGER REFERENCES incidents (id),
+    action        TEXT NOT NULL,          -- rollback | restart
+    target_image  TEXT,
+    from_image    TEXT,
+    reason        TEXT NOT NULL,
+    status        TEXT NOT NULL,
+    requested_by  TEXT NOT NULL,
+    requested_at  TEXT NOT NULL,
+    decided_by    TEXT,
+    decided_at    TEXT,
+    decision_note TEXT,
+    jenkins_queue TEXT,
+    jenkins_build TEXT,
+    started_at    TEXT,
+    finished_at   TEXT,
+    detail        TEXT,
+    health        TEXT,                   -- JSON: Jenkins smoke test + platform check
+    updated_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_recovery_status ON recovery_actions (status);
 """
 
-JSON_COLUMNS = {"payload", "evidence", "rca", "ground_truth", "labels", "annotations", "notes"}
+JSON_COLUMNS = {"payload", "evidence", "rca", "ground_truth", "labels", "annotations", "notes",
+                "health"}
 
 
 def utcnow() -> str:

@@ -30,9 +30,12 @@ Terraform provisions the infrastructure; Jenkins executes delivery pipelines.
 | `platform/backend/` | FastAPI platform API + incident collector ([guide](platform/README.md)) | ✅ Step 6 |
 | `platform/frontend/` | React website: Dashboard, Pipeline, Deployments, Monitoring, Logs, Incidents, Recovery | ✅ Step 6 |
 | `rca/` | Explainable RCA engine: rules baseline, Random Forest, Isolation Forest, evaluations ([guide](rca/README.md)) | ✅ Step 7 |
-| `docs/` | Roadmap, setup guide, report material | ongoing |
+| `jenkins/recovery.Jenkinsfile` | Executes operator-approved rollbacks and restarts | ✅ Step 8 |
+| `docs/` | [Architecture](docs/architecture.md), [setup guide](docs/setup-guide.md), [demo script](docs/demo-script.md), [project report](docs/project-report.md), [roadmap](docs/roadmap.md) | ✅ |
 
-See [docs/roadmap.md](docs/roadmap.md) for the step-by-step plan.
+**Start here:** [docs/setup-guide.md](docs/setup-guide.md) deploys everything on AWS, and
+[docs/demo-script.md](docs/demo-script.md) shows the full commit → incident → RCA →
+approved recovery loop.
 
 ## Quick start (demo app)
 
