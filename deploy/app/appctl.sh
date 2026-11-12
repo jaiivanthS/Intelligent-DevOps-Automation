@@ -51,6 +51,8 @@ run_image() {
   local image="$1" env="${2:-$(read_state app_env)}"
   env="${env:-production}"
   printf 'IMAGE=%s\nAPP_ENV=%s\n' "$image" "$env" > .env
+  # Host-specific compose settings (e.g. APP_PORT on the local Docker Desktop stack).
+  if [[ -f host.env ]]; then cat host.env >> .env; fi
   write_state app_env "$env"
   docker network inspect devops-net >/dev/null 2>&1 || docker network create devops-net >/dev/null
   # Explicit && chain: `set -e` is suspended when this function is used in an `if`.

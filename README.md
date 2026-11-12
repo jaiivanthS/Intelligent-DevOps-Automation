@@ -31,9 +31,11 @@ Terraform provisions the infrastructure; Jenkins executes delivery pipelines.
 | `platform/frontend/` | React website: Dashboard, Pipeline, Deployments, Monitoring, Logs, Incidents, Recovery | ✅ Step 6 |
 | `rca/` | Explainable RCA engine: rules baseline, Random Forest, Isolation Forest, evaluations ([guide](rca/README.md)) | ✅ Step 7 |
 | `jenkins/recovery.Jenkinsfile` | Executes operator-approved rollbacks and restarts | ✅ Step 8 |
+| `local/` | Run the whole platform on Docker Desktop, no AWS needed ([guide](local/README.md)) | ✅ |
 | `docs/` | [Architecture](docs/architecture.md), [setup guide](docs/setup-guide.md), [demo script](docs/demo-script.md), [project report](docs/project-report.md), [roadmap](docs/roadmap.md) | ✅ |
 
-**Start here:** [docs/setup-guide.md](docs/setup-guide.md) deploys everything on AWS, and
+**Start here:** [local/README.md](local/README.md) runs everything free on one PC with
+Docker Desktop, [docs/setup-guide.md](docs/setup-guide.md) deploys everything on AWS, and
 [docs/demo-script.md](docs/demo-script.md) shows the full commit → incident → RCA →
 approved recovery loop.
 

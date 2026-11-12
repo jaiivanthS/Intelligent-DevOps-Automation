@@ -1,0 +1,12 @@
+# Local stack: read release state from the app-host container's volume instead of
+# /opt/app/state on the EC2 host.
+# Use with: docker compose -f platform/docker-compose.yml -f local/platform.override.yml ...
+services:
+  platform-api:
+    volumes:
+      - app_state:/app-state:ro
+
+volumes:
+  app_state:
+    name: devops-app-state
+    external: true

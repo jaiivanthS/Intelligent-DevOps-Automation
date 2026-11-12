@@ -26,6 +26,8 @@ jenkins:
             value: "${ECR_REPOSITORY:-}"
           - key: APP_HOST
             value: "${APP_HOST:-}"
+          - key: APP_URL
+            value: "${APP_URL:-}"
           - key: PLATFORM_API_URL
             value: "${PLATFORM_API_URL:-}"
           - key: PLATFORM_INGEST_TOKEN

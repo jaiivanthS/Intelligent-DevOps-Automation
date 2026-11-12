@@ -1,0 +1,6 @@
+# Local stack: Jenkins joins devops-net so it can reach app-host, demo-app and platform-api.
+# Use with: docker compose -f jenkins/docker-compose.yml -f local/jenkins.override.yml ...
+networks:
+  default:
+    name: devops-net
+    external: true

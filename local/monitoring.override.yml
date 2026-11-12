@@ -1,0 +1,19 @@
+# Local stack: scrape Jenkins by container name and run node-exporter in a container
+# (on AWS it runs on each EC2 host, installed by the Terraform bootstrap).
+# Use with: docker compose -f monitoring/docker-compose.yml -f local/monitoring.override.yml ...
+services:
+  prometheus:
+    volumes:
+      - ../local/prometheus-targets:/etc/prometheus/targets:ro
+
+  # Published on the PC so Prometheus' existing host.docker.internal:9100 target works.
+  # Reports the Docker Desktop VM, which is the "host" for every container here.
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: node-exporter
+    restart: unless-stopped
+    command: ["--path.rootfs=/host"]
+    pid: host
+    ports: ["127.0.0.1:9100:9100"]
+    volumes:
+      - /:/host:ro

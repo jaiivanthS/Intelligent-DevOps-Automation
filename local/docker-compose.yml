@@ -1,0 +1,42 @@
+# Local (Docker Desktop) stand-ins for the AWS pieces. Started by local/up.ps1.
+#   registry   localhost:5000   replaces ECR
+#   app-host   SSH :22 on devops-net only   replaces the app EC2 instance
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "3" }
+
+services:
+  registry:
+    image: registry:2.8.3
+    container_name: registry
+    restart: unless-stopped
+    # Bound to localhost: the Docker daemon pushes/pulls localhost:5000/demo-app,
+    # which Docker treats as a trusted (plain HTTP) registry.
+    ports: ["127.0.0.1:5000:5000"]
+    volumes:
+      - registry_data:/var/lib/registry
+    logging: *logging
+
+  app-host:
+    build: ./app-host
+    image: devops-platform/app-host:local
+    container_name: app-host
+    hostname: app-host
+    restart: unless-stopped
+    environment:
+      APP_PORT: "${APP_PORT:-8088}" # http://localhost:8088 -> demo-app
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../jenkins/secrets/app_deploy_key.pub:/run/secrets/app_deploy_key.pub:ro
+      - app_state:/opt/app/state
+    logging: *logging
+
+volumes:
+  registry_data:
+  app_state:
+    name: devops-app-state # shared with platform-api (local/platform.override.yml)
+
+networks:
+  default:
+    name: devops-net
+    external: true

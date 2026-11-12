@@ -97,7 +97,7 @@ pipeline {
         script {
           def expected = params.ACTION == 'rollback' ? params.TARGET_IMAGE.tokenize(':')[-1] : ''
           def rc = sh(returnStatus: true, script: """
-            python3 deploy/scripts/smoke_test.py "http://\$APP_HOST" ${expected ? "'${expected}'" : ''} \
+            python3 deploy/scripts/smoke_test.py "\${APP_URL:-http://\$APP_HOST}"${expected ? "'${expected}'" : ''} \
               --timeout 90 > recovery-smoke.txt 2>&1
           """)
           sh 'cat recovery-smoke.txt'

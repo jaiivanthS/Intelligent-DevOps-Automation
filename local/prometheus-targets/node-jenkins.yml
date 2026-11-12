@@ -1,0 +1,3 @@
+# Local stack: Jenkins shares the PC's node-exporter (host.docker.internal:9100,
+# already scraped as app-host), so there is no separate Jenkins host to scrape.
+[]

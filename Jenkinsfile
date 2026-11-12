@@ -5,6 +5,7 @@
 // Expected Jenkins environment (set by jenkins/casc.yaml from .env):
 //   AWS_REGION, ECR_REGISTRY, ECR_REPOSITORY  empty -> CI only, no push
 //   APP_HOST                                  empty -> no deployment stages
+//   APP_URL                                   app URL for smoke tests (default http://APP_HOST)
 //   PLATFORM_API_URL                          empty -> no status events sent
 // Credential: app-host-ssh (SSH key for ubuntu@APP_HOST).
 
@@ -246,9 +247,14 @@ print('version', info['version'])
       steps {
         sh '''
           # Per-build Docker config: authenticate to ECR through the EC2 instance role.
+          # (ECR_REGISTRY is empty on the local stack, which pushes to an unauthenticated registry.)
           export DOCKER_CONFIG="$WORKSPACE/.docker-ci"
           mkdir -p "$DOCKER_CONFIG"
-          printf '{ "credHelpers": { "%s": "ecr-login" } }\n' "$ECR_REGISTRY" > "$DOCKER_CONFIG/config.json"
+          if [ -n "${ECR_REGISTRY:-}" ]; then
+            printf '{ "credHelpers": { "%s": "ecr-login" } }\n' "$ECR_REGISTRY" > "$DOCKER_CONFIG/config.json"
+          else
+            echo '{}' > "$DOCKER_CONFIG/config.json"
+          fi
 
           docker tag "$LOCAL_IMAGE" "$ECR_REPOSITORY:$IMAGE_TAG"
           docker push "$ECR_REPOSITORY:$IMAGE_TAG"
@@ -298,7 +304,7 @@ print('version', info['version'])
       steps {
         script {
           def rc = sh(returnStatus: true, script: '''
-            python3 deploy/scripts/smoke_test.py "http://$APP_HOST" "$IMAGE_TAG" --timeout 60 \
+            python3 deploy/scripts/smoke_test.py "${APP_URL:-http://$APP_HOST}" "$IMAGE_TAG" --timeout 60 \
               > "$REPORTS/smoke-test.txt" 2>&1
             rc=$?
             cat "$REPORTS/smoke-test.txt"
