@@ -1,0 +1,66 @@
+#!/bin/bash
+# First-boot setup for the ${role} host. Rendered by Terraform (templatefile).
+# Log: /var/log/bootstrap.log   Completion marker: /var/lib/bootstrap.done
+set -euxo pipefail
+exec > >(tee -a /var/log/bootstrap.log) 2>&1
+
+export DEBIAN_FRONTEND=noninteractive
+hostnamectl set-hostname "${hostname}"
+
+# --- base packages -----------------------------------------------------------
+apt-get update
+apt-get install -y ca-certificates curl gnupg git jq unzip amazon-ecr-credential-helper
+
+# --- swap (protects small instances from OOM during builds) -------------------
+if [ ! -f /swapfile ]; then
+  fallocate -l 2G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
+# --- Docker Engine + Compose plugin (official repository) ---------------------
+mkdir -p /etc/docker
+cat > /etc/docker/daemon.json <<'EOF'
+{
+  "log-driver": "json-file",
+  "log-opts": { "max-size": "10m", "max-file": "3" }
+}
+EOF
+
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+  > /etc/apt/sources.list.d/docker.list
+apt-get update
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+systemctl enable --now docker
+usermod -aG docker ubuntu
+
+# --- ECR authentication through the instance role (no stored AWS keys) --------
+for home in /root /home/ubuntu; do
+  mkdir -p "$home/.docker"
+  echo '{ "credHelpers": { "${ecr_registry}": "ecr-login" } }' > "$home/.docker/config.json"
+done
+chown -R ubuntu:ubuntu /home/ubuntu/.docker
+
+# --- node-exporter for host metrics (scraped by Prometheus) -------------------
+docker run -d --name node-exporter --restart unless-stopped \
+  --net host --pid host -v /:/host:ro,rslave \
+  quay.io/prometheus/node-exporter:v1.8.2 --path.rootfs=/host
+
+# --- working directory used by later steps ------------------------------------
+install -d -o ubuntu -g ubuntu /opt/${workdir}
+cat > /etc/devops-platform.env <<'EOF'
+PROJECT=${project}
+ENVIRONMENT=${environment}
+ROLE=${role}
+AWS_REGION=${aws_region}
+ECR_REGISTRY=${ecr_registry}
+ECR_REPOSITORY=${ecr_repository}
+EOF
+
+touch /var/lib/bootstrap.done
+echo "Bootstrap of ${role} host complete"

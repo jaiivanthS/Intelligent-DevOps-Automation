@@ -1,0 +1,11 @@
+# Optional remote state. Create the bucket once (versioning + encryption on),
+# then copy this file to backend.tf and run `terraform init -migrate-state`.
+terraform {
+  backend "s3" {
+    bucket       = "REPLACE-ME-devops-platform-tfstate"
+    key          = "dev/terraform.tfstate"
+    region       = "ap-south-1"
+    encrypt      = true
+    use_lockfile = true # S3-native state locking (Terraform >= 1.10)
+  }
+}

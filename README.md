@@ -23,7 +23,7 @@ Terraform provisions the infrastructure; Jenkins executes delivery pipelines.
 | Path | Contents | Status |
 |---|---|---|
 | `demo-app/` | Python FastAPI inventory service with metrics, JSON logs and failure injection | ✅ Step 1 |
-| `infra/terraform/` | AWS VPC, security groups, IAM, ECR, EC2 | Step 2 |
+| `infra/terraform/` | AWS VPC, security groups, IAM, ECR, EC2 ([setup guide](infra/terraform/README.md)) | ✅ Step 2 |
 | `jenkins/`, `Jenkinsfile` | Jenkins setup and CI/CD pipeline | Steps 3–4 |
 | `monitoring/` | Prometheus, Grafana, Loki, alert rules | Step 5 |
 | `platform/backend/` | FastAPI platform API + incident collector | Step 6 |
