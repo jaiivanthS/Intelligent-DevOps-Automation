@@ -1,0 +1,21 @@
+[project]
+name = "demo-app"
+version = "0.1.0"
+description = "Demo inventory service deployed and monitored by the DevOps automation platform"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S"]
+ignore = ["B008"]  # FastAPI's Depends()/Header() defaults are idiomatic
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S105"]
+"app/chaos.py" = ["S311"]  # non-crypto randomness is intentional here
