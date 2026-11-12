@@ -21,6 +21,13 @@ resource "aws_key_pair" "admin" {
 locals {
   ecr_registry = split("/", aws_ecr_repository.demo_app.repository_url)[0]
 
+  # Fixed private IPs let each host know the other's address at boot
+  # (Jenkins deploys to the app host; Prometheus scrapes Jenkins) without a dependency cycle.
+  private_ips = {
+    jenkins = cidrhost(var.public_subnet_cidr, 10)
+    app     = cidrhost(var.public_subnet_cidr, 20)
+  }
+
   hosts = {
     jenkins = {
       instance_type    = var.jenkins_instance_type
@@ -45,6 +52,7 @@ resource "aws_instance" "host" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = each.value.instance_type
   subnet_id              = aws_subnet.public.id
+  private_ip             = local.private_ips[each.key]
   vpc_security_group_ids = [each.value.security_group]
   iam_instance_profile   = each.value.instance_profile
   key_name               = aws_key_pair.admin.key_name
@@ -58,6 +66,8 @@ resource "aws_instance" "host" {
     aws_region     = var.aws_region
     ecr_registry   = local.ecr_registry
     ecr_repository = aws_ecr_repository.demo_app.repository_url
+    jenkins_ip     = local.private_ips["jenkins"]
+    app_ip         = local.private_ips["app"]
   })
 
   # IMDSv2 only. Hop limit 2 lets containers (e.g. Jenkins in Docker) use the instance role.

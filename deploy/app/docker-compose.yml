@@ -1,0 +1,30 @@
+# Runs on the app host in /opt/app. IMAGE and APP_ENV come from .env, which appctl.sh writes.
+services:
+  demo-app:
+    image: "${IMAGE:?IMAGE must be set by appctl.sh}"
+    container_name: demo-app
+    restart: unless-stopped
+    ports:
+      - "80:8000"
+    environment:
+      APP_ENV: "${APP_ENV:-production}"
+      LOG_LEVEL: INFO
+      CHAOS_ENABLED: "true"
+    env_file:
+      - secrets.env # CHAOS_TOKEN, generated on the host by appctl.sh, never committed
+    labels:
+      platform.service: demo-app
+    deploy:
+      resources:
+        limits:
+          memory: 768m # the memory-leak failure mode is contained to this container
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Shared network so the monitoring stack (step 5) can scrape the app by name.
+networks:
+  default:
+    name: devops-net

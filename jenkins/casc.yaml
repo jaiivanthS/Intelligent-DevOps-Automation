@@ -24,6 +24,23 @@ jenkins:
             value: "${ECR_REGISTRY:-}"
           - key: ECR_REPOSITORY
             value: "${ECR_REPOSITORY:-}"
+          - key: APP_HOST
+            value: "${APP_HOST:-}"
+          - key: PLATFORM_API_URL
+            value: "${PLATFORM_API_URL:-}"
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - basicSSHUserPrivateKey:
+              scope: GLOBAL
+              id: app-host-ssh
+              description: "Deploy key: Jenkins -> app host (ubuntu)"
+              username: ubuntu
+              privateKeySource:
+                directEntry:
+                  privateKey: "${readFile:/run/secrets/app_deploy_key}"
 
 unclassified:
   location:

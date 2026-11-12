@@ -30,6 +30,9 @@ crash.log
 !.env.example
 *.pem
 *.key
+jenkins/secrets/
+deploy/app/secrets.env
+deploy/app/state/
 
 # ML artefacts / datasets (large, regenerate or download)
 rca/data/raw/

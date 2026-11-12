@@ -15,6 +15,7 @@ services:
     volumes:
       - jenkins_home:/var/jenkins_home
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./secrets/app_deploy_key:/run/secrets/app_deploy_key:ro
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/login"]
       interval: 30s

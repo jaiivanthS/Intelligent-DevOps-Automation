@@ -17,7 +17,9 @@ if [[ ! -f .env ]]; then
         -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' 2>/dev/null)"; then
     ip="$(curl -fsS -m 2 -H "X-aws-ec2-metadata-token: ${token}" \
         http://169.254.169.254/latest/meta-data/public-ipv4 || true)"
-    [[ -n "${ip}" ]] && sed -i "s|^JENKINS_URL=.*|JENKINS_URL=http://${ip}:8080/|" .env
+    if [[ -n "${ip}" ]]; then
+      sed -i "s|^JENKINS_URL=.*|JENKINS_URL=http://${ip}:8080/|" .env
+    fi
   fi
 
   # AWS settings written by the Terraform bootstrap script.
@@ -27,9 +29,35 @@ if [[ ! -f .env ]]; then
     sed -i "s|^AWS_REGION=.*|AWS_REGION=${AWS_REGION}|" .env
     sed -i "s|^ECR_REGISTRY=.*|ECR_REGISTRY=${ECR_REGISTRY}|" .env
     sed -i "s|^ECR_REPOSITORY=.*|ECR_REPOSITORY=${ECR_REPOSITORY}|" .env
+    sed -i "s|^APP_HOST=.*|APP_HOST=${APP_PRIVATE_IP:-}|" .env
+    if [[ -n "${APP_PRIVATE_IP:-}" ]]; then
+      sed -i "s|^PLATFORM_API_URL=.*|PLATFORM_API_URL=http://${APP_PRIVATE_IP}:8000|" .env
+    fi
   fi
   chmod 600 .env
   echo "Admin password saved in $(pwd)/.env (JENKINS_ADMIN_PASSWORD)."
+fi
+
+# Dedicated SSH key Jenkins uses to deploy to the app host (loaded by JCasC).
+mkdir -p secrets
+if [[ ! -f secrets/app_deploy_key ]]; then
+  ssh-keygen -q -t ed25519 -N '' -C "jenkins-deploy@$(hostname)" -f secrets/app_deploy_key
+  chmod 600 secrets/app_deploy_key
+  # Owned by uid 1000 = the jenkins user inside the container.
+  sudo chown 1000:1000 secrets/app_deploy_key 2>/dev/null || true
+  app_host="$(grep '^APP_HOST=' .env | cut -d= -f2-)"
+  cat <<EOF
+
+=====================================================================
+ One-time step: authorise the Jenkins deploy key on the app host.
+ From your PC (where your admin SSH key lives) run:
+
+   ssh ubuntu@<app_public_ip> "echo '$(cat secrets/app_deploy_key.pub)' >> ~/.ssh/authorized_keys"
+
+ (app host private IP: ${app_host:-unknown})
+=====================================================================
+
+EOF
 fi
 
 # Group id of the host's Docker socket, so the jenkins user can run docker.

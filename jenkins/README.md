@@ -23,6 +23,13 @@ grep JENKINS_ADMIN_PASSWORD .env      # login password (user: admin)
 
 Then open `terraform output jenkins_url`.
 
+On the first run, `setup.sh` also creates a dedicated deploy key. It is stored in
+`jenkins/secrets/`, which is git-ignored, and loaded as the `app-host-ssh`
+credential. The script prints a one-time command for you to run from your PC.
+That command adds the key's public half to the app host's `authorized_keys`.
+`APP_HOST` and `PLATFORM_API_URL` are filled in automatically from the
+Terraform bootstrap. The app host's private IP is fixed at `10.20.1.20`.
+
 ## Connect GitHub
 
 In the GitHub repo, open **Settings → Webhooks → Add webhook** and set:
@@ -45,7 +52,16 @@ Checkout ─▶ Install deps ─▶ ┌ Unit tests + coverage (pytest)      ┐
         ─▶ Build image ─▶ Image scan (trivy: fixable CRITICAL fails)
         ─▶ Container smoke test (healthcheck, /ready, /api, /metrics, version)
         ─▶ Publish to ECR  (tag = <build>-<git sha>, only when ECR_REPOSITORY is set)
+        ─▶ Approval (production) ─▶ Deploy ─▶ Post-deploy smoke test ─▶ Promote
+                                     └──── on failure: automatic rollback to last good image
 ```
+
+Build parameters:
+
+* `DEPLOY_ENV`: `production` (requires approval) or `staging`
+* `AUTO_APPROVE`: skips the approval gate, for demos
+
+See [`../deploy/README.md`](../deploy/README.md) for details of the release flow.
 
 Reports (JUnit, coverage, bandit, pip-audit, trivy, `image.env`) are archived
 on every build. Pushing to ECR uses the EC2 instance role, so no AWS keys are

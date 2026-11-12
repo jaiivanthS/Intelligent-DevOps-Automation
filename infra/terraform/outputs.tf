@@ -15,6 +15,10 @@ output "app_private_ip" {
   value       = aws_instance.host["app"].private_ip
 }
 
+output "jenkins_private_ip" {
+  value = aws_instance.host["jenkins"].private_ip
+}
+
 output "jenkins_url" {
   value = "http://${aws_eip.host["jenkins"].public_ip}:8080"
 }
