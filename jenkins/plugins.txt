@@ -1,0 +1,21 @@
+# Pipeline core
+workflow-aggregator
+pipeline-stage-view
+pipeline-utility-steps
+# Source control & triggers
+git
+github
+# Configuration as code + job creation
+configuration-as-code
+job-dsl
+# Credentials & deployment (used in step 4)
+credentials-binding
+ssh-agent
+# Reports
+junit
+coverage
+# Quality of life
+timestamper
+ws-cleanup
+# Metrics endpoint (/prometheus) scraped in step 5
+prometheus

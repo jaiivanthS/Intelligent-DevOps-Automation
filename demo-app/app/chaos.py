@@ -45,7 +45,8 @@ class ChaosController:
         self._state = ChaosState()
         self._leak: list[bytearray] = []
         self._leaked_bytes = 0
-        self._rng = rng or random.Random()
+        # Non-cryptographic randomness is intentional: it only decides which requests fail.
+        self._rng = rng or random.Random()  # nosec B311
         self._publish()
 
     @property

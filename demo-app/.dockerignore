@@ -1,0 +1,12 @@
+.venv/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+reports/
+tests/
+Dockerfile
+.dockerignore
+README.md

@@ -1,0 +1,26 @@
+services:
+  jenkins:
+    build:
+      context: .
+    image: devops-platform/jenkins:local
+    container_name: jenkins
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8080:8080"
+    # Lets the jenkins user use the host Docker daemon. The socket gives root-equivalent
+    # access to the host, which is why this host is dedicated to CI and locked to admin IPs.
+    group_add:
+      - "${DOCKER_GID:?Run ./setup.sh first so DOCKER_GID is set in .env}"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/login"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+
+volumes:
+  jenkins_home:
