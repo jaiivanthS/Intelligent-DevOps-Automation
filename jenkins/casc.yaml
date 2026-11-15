@@ -12,9 +12,8 @@ jenkins:
   authorizationStrategy:
     loggedInUsersCanDoAnything:
       allowAnonymousRead: false
-  crumbIssuer:
-    standard:
-      excludeClientIPFromCrumb: true
+  # CSRF protection: Jenkins' default crumb issuer (excludeClientIPFromCrumb was
+  # removed from current Jenkins and makes JCasC fail at boot).
   globalNodeProperties:
     - envVars:
         env:

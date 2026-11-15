@@ -14,7 +14,10 @@
 #>
 param([switch]$Rebuild)
 
-$ErrorActionPreference = 'Stop'
+# Not 'Stop': Windows PowerShell 5.1 turns any stderr output of a native command
+# (docker compose progress, "not found" probes) into a terminating error.
+# Native calls are checked through $LASTEXITCODE; cmdlets use -ErrorAction Stop.
+$ErrorActionPreference = 'Continue'
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 
@@ -65,7 +68,11 @@ $busy = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
 if ($busy) { Fail ("These ports are taken by other programs; stop them first:`n  " + ($busy -join "`n  ")) }
 
 docker network inspect devops-net *> $null
-if ($LASTEXITCODE -ne 0) { Info 'Creating network devops-net'; docker network create devops-net | Out-Null }
+if ($LASTEXITCODE -ne 0) {
+  Info 'Creating network devops-net'
+  docker network create devops-net | Out-Null
+  if ($LASTEXITCODE -ne 0) { Fail 'Could not create the devops-net network' }
+}
 
 # --- 2. Secrets and .env files ------------------------------------------------------------
 $keyDir = Join-Path $Root 'jenkins\secrets'
@@ -77,8 +84,9 @@ if (-not (Test-Path "$keyDir\app_deploy_key")) {
 }
 
 # Group that owns the Docker socket inside containers (root on Docker Desktop).
-$dockerGid = (docker run --rm -v /var/run/docker.sock:/var/run/docker.sock alpine:3.20 stat -c '%g' /var/run/docker.sock).Trim()
+$dockerGid = docker run --rm -v /var/run/docker.sock:/var/run/docker.sock alpine:3.20 stat -c '%g' /var/run/docker.sock 2> $null
 if ($LASTEXITCODE -ne 0 -or -not $dockerGid) { Fail 'Could not read the Docker socket group id' }
+$dockerGid = "$dockerGid".Trim()
 
 $jenkinsEnv = Join-Path $Root 'jenkins\.env'
 if (-not (Test-Path $jenkinsEnv)) {
@@ -126,7 +134,7 @@ $auth = 'Basic ' + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("${
 $ready = $false
 for ($i = 0; $i -lt 90; $i++) {
   try {
-    Invoke-RestMethod 'http://localhost:8080/whoAmI/api/json' -Headers @{ Authorization = $auth } -TimeoutSec 5 | Out-Null
+    Invoke-RestMethod 'http://localhost:8080/whoAmI/api/json' -Headers @{ Authorization = $auth } -TimeoutSec 5 -ErrorAction Stop | Out-Null
     $ready = $true; break
   } catch { Start-Sleep -Seconds 5 }
 }
@@ -142,10 +150,10 @@ Set-EnvValue $platEnv 'JENKINS_USER' $adminUser
 if (-not (Get-EnvValue $platEnv 'JENKINS_TOKEN')) {
   Info 'Creating a Jenkins API token for the platform'
   $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
-  $crumb = Invoke-RestMethod 'http://localhost:8080/crumbIssuer/api/json' -Headers @{ Authorization = $auth } -WebSession $session
+  $crumb = Invoke-RestMethod 'http://localhost:8080/crumbIssuer/api/json' -Headers @{ Authorization = $auth } -WebSession $session -ErrorAction Stop
   $resp = Invoke-RestMethod -Method Post 'http://localhost:8080/me/descriptorByName/jenkins.security.ApiTokenProperty/generateNewToken' `
     -Headers @{ Authorization = $auth; $crumb.crumbRequestField = $crumb.crumb } `
-    -Body @{ newTokenName = 'platform-local' } -WebSession $session
+    -Body @{ newTokenName = 'platform-local' } -WebSession $session -ErrorAction Stop
   if (-not $resp.data.tokenValue) { Fail 'Jenkins did not return an API token' }
   Set-EnvValue $platEnv 'JENKINS_TOKEN' $resp.data.tokenValue
 }
