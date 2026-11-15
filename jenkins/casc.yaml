@@ -53,6 +53,13 @@ jobs:
   - script: |
       pipelineJob('demo-app') {
         description('Build, test, scan and publish demo-app (Jenkinsfile in the repository root).')
+        // Same parameters as the Jenkinsfile. Declared here too because JCasC rewrites
+        // the job on every Jenkins restart, which would otherwise drop them until the
+        // next build ran (buildWithParameters then fails with "not parameterized").
+        parameters {
+          choiceParam('DEPLOY_ENV', ['production', 'staging'], 'APP_ENV label for the deployment. production requires manual approval.')
+          booleanParam('AUTO_APPROVE', false, 'Skip the approval gate (use for demos only).')
+        }
         properties {
           disableConcurrentBuilds()
           pipelineTriggers {
