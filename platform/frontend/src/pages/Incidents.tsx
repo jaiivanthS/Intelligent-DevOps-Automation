@@ -67,7 +67,7 @@ export default function Incidents() {
 }
 
 const ACTION_LABEL: Record<string, string> = {
-  rollback: "Roll back to the last good release",
+  rollback: "Roll back to the previous good release",
   restart: "Restart the service",
   none: "No automated action; investigate using the checks above",
 };
@@ -120,6 +120,13 @@ function RcaPanel({ rca, incidentId }: { rca: NonNullable<Incident["rca"]>; inci
           </>
         )}
       </p>
+      {rca.alternative_action && (
+        <p className="small">
+          <span className="hint-warn">Also consider: {ACTION_LABEL[rca.alternative_action.action] ?? rca.alternative_action.action}.</span>{" "}
+          <span className="muted">{rca.alternative_action.reason}</span>{" "}
+          · <Link to={`/recovery?incident=${incidentId}&action=${rca.alternative_action.action}`}>Request it →</Link>
+        </p>
+      )}
       <div className="rca-meta">
         <span>
           Rule-based baseline: <strong>{rca.rule_based.top_cause.replace(/_/g, " ")}</strong>{" "}

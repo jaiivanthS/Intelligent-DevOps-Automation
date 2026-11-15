@@ -96,6 +96,7 @@ export interface Incident extends IncidentSummary {
     evidence: string[];
     suggested_checks: string[];
     suggested_action: "rollback" | "restart" | "none";
+    alternative_action?: { action: "rollback" | "restart"; reason: string } | null;
     model: string;
     analyzed_at: string;
     rule_based: { top_cause: string; ranking: { cause: string; score: number }[] };

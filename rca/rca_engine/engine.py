@@ -5,7 +5,7 @@
 
 Result (stored as incidents.rca by the platform):
     top_cause, top_cause_title, confidence, ranking[{cause, title, score}],
-    evidence[str], suggested_checks[str], suggested_action, model,
+    evidence[str], suggested_checks[str], suggested_action, alternative_action, model,
     rule_based{top_cause, ranking}, anomaly{score, is_anomalous, top_deviations}
 """
 
@@ -21,6 +21,19 @@ from .features import extract
 from .model import RCAModel
 
 log = logging.getLogger("rca")
+
+# bad_deployment score above which a recent deploy makes rollback worth offering.
+ALT_ROLLBACK_MIN_SCORE = 0.25
+
+
+def _has_rollback_target(evidence: dict[str, Any]) -> bool:
+    """True if an earlier successful release exists that differs from the running image."""
+    release = evidence.get("release") or {}
+    current = release.get("current_image")
+    if release.get("last_good_image") and release.get("last_good_image") != current:
+        return True
+    return any(h.get("result") == "success" and h.get("image") and h.get("image") != current
+               for h in evidence.get("release_history") or [])
 
 
 class RCAEngine:
@@ -53,9 +66,26 @@ class RCAEngine:
         cause = CAUSES[top]
 
         action = cause.action
-        release = evidence.get("release") or {}
-        if action == "rollback" and not release.get("last_good_image"):
-            action = "none"  # nothing known-good to roll back to
+        can_roll_back = _has_rollback_target(evidence)
+        if action == "rollback" and not can_roll_back:
+            action = "none"  # nothing earlier to roll back to
+
+        # The top cause isn't a bad deployment, but a deploy just happened and it is a
+        # strong runner-up (or the rule baseline's verdict): offer rollback as an
+        # alternative instead of hiding it. The operator decides; nothing runs by itself.
+        alternative = None
+        scores = dict(ranking)
+        if action != "rollback" and can_roll_back and f["recent_deploy"] and (
+                scores.get("bad_deployment", 0.0) >= ALT_ROLLBACK_MIN_SCORE
+                or rule_rank[0][0] == "bad_deployment"):
+            alternative = {
+                "action": "rollback",
+                "reason": (f"A deployment finished {f['mins_since_deploy']:.0f} min before this "
+                           f"incident; faulty deployment scores "
+                           f"{scores.get('bad_deployment', 0.0) * 100:.0f}%"
+                           + (" and is the rule baseline's top cause"
+                              if rule_rank[0][0] == "bad_deployment" else "") + "."),
+            }
 
         return {
             "top_cause": top,
@@ -67,6 +97,7 @@ class RCAEngine:
             "evidence": explain(f, evidence, top),
             "suggested_checks": list(cause.checks),
             "suggested_action": action,
+            "alternative_action": alternative,
             "model": self.name,
             "rule_based": {"top_cause": rule_rank[0][0],
                            "ranking": [{"cause": c, "score": round(s, 3)} for c, s in rule_rank[:3]]},
@@ -77,6 +108,16 @@ class RCAEngine:
 
 def _pct(v: float) -> str:
     return f"{v * 100:.1f}%"
+
+
+def _change_text(label: str, base: float, now: float) -> str:
+    """'rose from A to B' only when it actually rose; otherwise say what is true."""
+    if now > base * 1.1 + 0.001:
+        return f"{label} rose from {_pct(base)} to {_pct(now)}."
+    if now < base * 0.9 - 0.001:
+        return (f"{label} is {_pct(now)}, below the {_pct(base)} baseline "
+                "(the baseline window was already degraded).")
+    return f"{label} is {_pct(now)}, close to its {_pct(base)} baseline."
 
 
 def _metric_pair(evidence: dict, name: str) -> tuple[float | None, float | None]:
@@ -94,7 +135,7 @@ def explain(f: dict[str, float], evidence: dict[str, Any], top: str) -> list[str
     base, now = _metric_pair(evidence, "error_ratio")
     if f["err_delta"] > 0.02 or f["err_now"] > 0.05:
         add({"error_burst", "bad_deployment", "dependency_failure"},
-            f"5xx error ratio rose from {_pct(base or 0)} to {_pct(now or f['err_now'])}.")
+            _change_text("5xx error ratio", base or 0.0, now if now is not None else f["err_now"]))
     if f["lat_log_ratio"] > 1.0:
         b, n = _metric_pair(evidence, "latency_p95")
         add({"latency_degradation", "cpu_saturation", "bad_deployment"},

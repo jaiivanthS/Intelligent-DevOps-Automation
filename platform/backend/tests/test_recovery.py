@@ -39,6 +39,23 @@ def test_options(rc):
     assert o["approval_token_required"] is False
 
 
+def test_rollback_available_when_running_image_is_also_last_good(tmp_path):
+    # A release that passed its smoke test (so it is "last good") and broke later must
+    # still be roll-back-able to the previous release.
+    write_state(tmp_path)
+    state = tmp_path / "state"
+    (state / "last_good_image").write_text("repo/demo-app:11-def\n")
+    settings = make_settings(tmp_path, jenkins_user="platform", jenkins_token="tok")
+    with TestClient(create_app(settings, transport=httpx.MockTransport(handler))) as c:
+        o = c.get("/api/recovery/options").json()
+        assert o["rollback"]["available"] is True
+        assert o["rollback"]["default_target"] == TARGET
+        assert TARGET in o["rollback"]["targets"]
+        created = request(c)  # no explicit target: defaults to the previous release
+        assert created.status_code == 201, created.text
+        assert created.json()["target_image"] == TARGET
+
+
 def test_full_rollback_flow_linked_to_incident(rc):
     inc_id = rc.post("/api/alerts/alertmanager",
                      json={"alerts": [alert("HighErrorRate")]}).json()["opened_incidents"][0]

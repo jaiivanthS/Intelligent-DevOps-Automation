@@ -67,6 +67,7 @@ h3::before { content: "// "; color: var(--dim); }
 .mono { font-family: var(--f-mono); }
 .pixel { font-family: var(--f-pixel); }
 .muted { color: var(--muted); }
+.hint-warn { color: var(--warn); margin: 0; }
 .small { font-size: 11px; }
 .lime { color: var(--lime); }
 ::-webkit-scrollbar { width: 10px; height: 10px; }

@@ -6,7 +6,8 @@
 #                                    restore the last good image and exit 1
 #   appctl.sh promote                mark the running image as last known good
 #                                    (Jenkins calls this after smoke tests pass)
-#   appctl.sh rollback [image]       redeploy [image] or the last known good image
+#   appctl.sh rollback [image]       redeploy [image] or the last known good image;
+#                                    on success the target becomes last known good
 #   appctl.sh restart                restart the container and wait until healthy
 #   appctl.sh status                 JSON summary (current, last good, health)
 #   appctl.sh history [n]            last n release events (JSON lines)
@@ -109,6 +110,9 @@ cmd_rollback() {
   log "rolling back ${current:-none} -> $target"
   if run_image "$target"; then
     write_state current_image "$target"
+    # We deliberately returned to this release, so it is the known-good one now; otherwise
+    # last_good would still name the release we just rolled back from.
+    write_state last_good_image "$target"
     record rollback success "$target" "$current"
     log "rollback complete"
   else

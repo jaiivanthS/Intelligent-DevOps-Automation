@@ -86,6 +86,63 @@ def test_rollback_only_suggested_when_last_good_exists(model):
     assert engine.analyze(ev, al)["suggested_action"] == "none"
 
 
+class _FixedModel:
+    """Stands in for a trained model with a known ranking."""
+    kind = "fixed"
+
+    def __init__(self, ranking):
+        self.ranking = ranking
+
+    def rank(self, f):
+        return self.ranking
+
+    def anomaly(self, f):
+        return None
+
+
+def _deploy_evidence(minutes_ago: float, current: str, history: list[dict]) -> dict:
+    from datetime import UTC, datetime, timedelta
+    now = datetime.now(UTC)
+    return {
+        "collected_at": now.isoformat(),
+        "metrics": {"error_ratio": {"now": 0.4, "baseline": 0.56, "max": 0.6, "points": []}},
+        "logs": {"error_lines": 50, "events": {}, "top_messages": []},
+        "deployments": [{"ts": (now - timedelta(minutes=minutes_ago)).isoformat(),
+                         "event": "deploy", "status": "success", "image_tag": "3-abc"}],
+        "release": {"current_image": current, "last_good_image": current},
+        "release_history": history,
+    }
+
+
+def test_rollback_offered_as_alternative_when_deploy_is_runner_up():
+    # Live demo case: app errors 48% vs faulty deployment 41%, deploy 3 min earlier, the
+    # running image is also "last good" but an earlier release exists.
+    engine = RCAEngine(_FixedModel([("error_burst", 0.48), ("bad_deployment", 0.41),
+                                    ("dependency_failure", 0.07), ("latency_degradation", 0.04)]))
+    history = [{"action": "promote", "result": "success", "image": "r:3"},
+               {"action": "deploy", "result": "success", "image": "r:3"},
+               {"action": "promote", "result": "success", "image": "r:2"}]
+    r = engine.analyze(_deploy_evidence(3, "r:3", history), [])
+    assert r["top_cause"] == "error_burst" and r["suggested_action"] == "none"
+    assert r["alternative_action"]["action"] == "rollback"
+    assert "41%" in r["alternative_action"]["reason"]
+
+    # No earlier release -> nothing to offer.
+    r = engine.analyze(_deploy_evidence(3, "r:3", history[:2]), [])
+    assert r["alternative_action"] is None
+    # Old deploy -> not a candidate.
+    r = engine.analyze(_deploy_evidence(90, "r:3", history), [])
+    assert r["alternative_action"] is None
+
+
+def test_error_ratio_text_matches_direction():
+    from rca_engine.engine import _change_text
+    assert _change_text("5xx error ratio", 0.01, 0.4).startswith("5xx error ratio rose from 1.0%")
+    fell = _change_text("5xx error ratio", 0.561, 0.406)
+    assert "rose" not in fell and "below the 56.1% baseline" in fell
+    assert "close to" in _change_text("5xx error ratio", 0.40, 0.41)
+
+
 def test_missing_model_falls_back_to_rules(tmp_path):
     engine = RCAEngine.load(str(tmp_path / "nope.joblib"))
     assert engine.model is None and engine.name == "rule-based baseline"

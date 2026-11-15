@@ -59,9 +59,41 @@ def test_incident_resolves_when_all_alerts_resolve_then_new_incident(client):
     assert inc["status"] == "resolved"
     assert inc["resolved_at"]
 
+
+def test_alert_soon_after_resolution_reopens_incident(client):
+    # A rate-based alert can still fire just after the fault was fixed: same problem.
+    inc_id = post_alerts(client, alert("DependencyDown", category="dependency"))[
+        "opened_incidents"][0]
+    post_alerts(client, alert("DependencyDown", status="resolved", category="dependency"))
+    assert client.get(f"/api/incidents/{inc_id}").json()["status"] == "resolved"
+
+    again = post_alerts(client, alert("HighErrorRate"))
+    assert again["opened_incidents"] == []
+    inc = client.get(f"/api/incidents/{inc_id}").json()
+    assert inc["status"] == "open" and inc["resolved_at"] is None
+    assert {a["alertname"] for a in inc["alerts"]} == {"DependencyDown", "HighErrorRate"}
+    assert "Reopened: HighErrorRate" in inc["notes"][-1]["note"]
+
+
+def test_alert_after_reopen_window_opens_new_incident(client, monkeypatch):
+    import app.incidents
+    monkeypatch.setattr(app.incidents, "REOPEN_WINDOW_MIN", 0)
+    inc_id = post_alerts(client, alert("HighErrorRate"))["opened_incidents"][0]
+    post_alerts(client, alert("HighErrorRate", status="resolved"))
     again = post_alerts(client, alert("HighErrorRate"))
     assert len(again["opened_incidents"]) == 1
     assert again["opened_incidents"][0] != inc_id
+
+
+def test_baseline_ignores_points_inside_other_incidents():
+    from app.incidents import _summarise
+    # 0-9: healthy (1%), 10-19: an earlier incident (60%), 20-29: this incident (40%).
+    points = [[t, 0.01 if t < 10 else 0.6 if t < 20 else 0.4] for t in range(30)]
+    s = _summarise(points, this_start=20, exclude=[[10, 19]])
+    assert s["baseline"] == 0.01 and s["baseline_clean"] is True and s["now"] == 0.4
+    # Without the exclusion the old first-third rule would be used only as a fallback.
+    fallback = _summarise(points, this_start=2, exclude=[[0, 30]])
+    assert fallback["baseline_clean"] is False
 
 
 def test_resolution_for_unknown_alert_is_ignored(client):

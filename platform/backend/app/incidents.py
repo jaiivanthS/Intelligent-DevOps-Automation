@@ -2,8 +2,9 @@
 attaches an evidence snapshot (metrics, logs, recent deployments) when an
 incident opens. The RCA engine (step 7) reads that evidence.
 
-Correlation rule: a firing alert joins the open incident of the same service;
-otherwise it opens a new one. An incident resolves when all its alerts resolve.
+Correlation rule: a firing alert joins the open incident of the same service; if
+that service's last incident resolved less than REOPEN_WINDOW_MIN ago, it reopens
+it; otherwise it opens a new one. An incident resolves when all its alerts resolve.
 Alerts labelled ground_truth="true" (deliberate fault injection) are kept
 separately and never used as evidence, only for evaluating RCA.
 """
@@ -53,6 +54,30 @@ def _open_incident(c, service: str):
         "SELECT * FROM incidents WHERE service = ? AND status IN (?, ?) ORDER BY id DESC LIMIT 1",
         (service, *OPEN_STATES),
     ).fetchone()
+
+
+# An alert that fires this soon after an incident resolved is treated as the same problem
+# (typically a 5-minute rate window still above threshold after the fault was fixed) and
+# reopens that incident instead of opening a new one.
+REOPEN_WINDOW_MIN = 5
+
+
+def _reopen_recent(c, service: str, alertname: str, now: str):
+    since = (datetime.fromisoformat(now) - timedelta(minutes=REOPEN_WINDOW_MIN)).isoformat(
+        timespec="seconds")
+    inc = c.execute(
+        "SELECT * FROM incidents WHERE service = ? AND status = 'resolved' AND resolved_at > ? "
+        "ORDER BY resolved_at DESC LIMIT 1", (service, since)).fetchone()
+    if inc is None:
+        return None
+    notes = json.loads(inc["notes"] or "[]")
+    notes.append({"ts": now, "status": "open",
+                  "note": f"Reopened: {alertname} fired within {REOPEN_WINDOW_MIN} min of "
+                          "resolution (treated as the same problem)."})
+    c.execute("UPDATE incidents SET status = 'open', resolved_at = NULL, updated_at = ?, "
+              "notes = ? WHERE id = ?", (now, dumps(notes), inc["id"]))
+    log.info("incident %s reopened by %s", inc["id"], alertname)
+    return inc
 
 
 def _firing_ground_truth(c, service: str) -> list[dict[str, Any]]:
@@ -107,6 +132,10 @@ def ingest_alertmanager(db: Database, payload: dict[str, Any], default_service: 
                               (dumps(gt), inc["id"]))
             else:
                 inc = _open_incident(c, service)
+                if inc is None:
+                    inc = _reopen_recent(c, service, labels.get("alertname", "alert"), now)
+                    if inc is not None:
+                        touched.add(inc["id"])
                 if inc is None:
                     cur = c.execute(
                         "INSERT INTO incidents (service, title, severity, category, status, "
@@ -178,12 +207,49 @@ def set_status(db: Database, incident_id: int, status: str, note: str | None = N
 
 
 # --------------------------------------------------------------------- evidence
-def _summarise(points: list[list[float]]) -> dict[str, float | None]:
+# A fault is visible in the metrics a few minutes before its alert fires (rate windows +
+# the rule's `for:` delay) and for a few minutes after it is fixed.
+LEAD_S = 300
+TAIL_S = 300
+
+
+def _ts(iso: str) -> float:
+    return datetime.fromisoformat(iso).timestamp()
+
+
+def _baseline_spans(db: Database, incident_id: int, service: str) -> tuple[float | None,
+                                                                           list[list[float]]]:
+    """(start of this incident's fault, [[start, end], ...] of other incidents' faults) so the
+    baseline is computed only from healthy points."""
+    row = db.one("SELECT opened_at FROM incidents WHERE id = ?", (incident_id,))
+    this_start = _ts(row["opened_at"]) - LEAD_S if row else None
+    since = (datetime.now(UTC) - timedelta(minutes=EVIDENCE_WINDOW_MIN + 10)).isoformat(
+        timespec="seconds")
+    spans = []
+    for r in db.query("SELECT opened_at, resolved_at FROM incidents WHERE service = ? AND id != ? "
+                      "AND (resolved_at IS NULL OR resolved_at >= ?)",
+                      (service, incident_id, since)):
+        end = _ts(r["resolved_at"]) + TAIL_S if r["resolved_at"] else float("inf")
+        spans.append([_ts(r["opened_at"]) - LEAD_S, end])
+    return this_start, spans
+
+
+def _summarise(points: list[list[float]], this_start: float | None = None,
+               exclude: list[list[float]] | None = None) -> dict[str, Any]:
+    """now / baseline / max of a series. The baseline is the median of healthy points:
+    before this incident's fault and outside other incidents. If there are too few of
+    those, fall back to the first third of the window (flagged as baseline_clean=False)."""
     values = [v for _, v in points if v == v]  # drop NaN
     if not values:
         return {"now": None, "baseline": None, "max": None}
-    head = values[: max(1, len(values) // 3)]
-    return {"now": values[-1], "baseline": statistics.median(head), "max": max(values)}
+    healthy = [v for t, v in points if v == v
+               and (this_start is None or t < this_start)
+               and not any(a <= t <= b for a, b in exclude or [])]
+    if len(healthy) >= 3:
+        baseline, clean = statistics.median(healthy), True
+    else:
+        baseline, clean = statistics.median(values[: max(1, len(values) // 3)]), not exclude
+    return {"now": values[-1], "baseline": baseline, "max": max(values), "baseline_clean": clean}
 
 
 async def collect_evidence(db: Database, incident_id: int, prom: Prometheus, loki: Loki,
@@ -191,12 +257,14 @@ async def collect_evidence(db: Database, incident_id: int, prom: Prometheus, lok
                            ) -> dict[str, Any]:
     evidence: dict[str, Any] = {"collected_at": utcnow(), "window_minutes": EVIDENCE_WINDOW_MIN}
 
+    this_start, exclude = _baseline_spans(db, incident_id, service)
+    evidence["baseline_excluded"] = [[a, b if b != float("inf") else None] for a, b in exclude]
     metrics: dict[str, Any] = {}
     for name, expr in EVIDENCE_QUERIES.items():
         try:
             series = await prom.series(expr, EVIDENCE_WINDOW_MIN, EVIDENCE_STEP_S)
             points = series[0]["points"] if series else []
-            metrics[name] = {**_summarise(points), "points": points}
+            metrics[name] = {**_summarise(points, this_start, exclude), "points": points}
         except UpstreamError as exc:
             metrics[name] = {"error": str(exc)}
     evidence["metrics"] = metrics

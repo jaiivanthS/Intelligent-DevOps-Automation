@@ -78,6 +78,21 @@ def known_images(state: ReleaseState) -> set[str]:
     return {i for i in images if i}
 
 
+def rollback_targets(state: ReleaseState) -> list[str]:
+    """Images other than the running one, best default first: the last good image if it
+    differs from the running one, then earlier successful releases, newest first."""
+    cur = state.current()
+    ordered: list[str] = []
+    if cur["last_good_image"] and cur["last_good_image"] != cur["current_image"]:
+        ordered.append(cur["last_good_image"])
+    for h in state.history(200):  # newest first
+        image = h.get("image")
+        if h.get("result") == "success" and image and image != cur["current_image"] \
+                and image not in ordered:
+            ordered.append(image)
+    return ordered
+
+
 def options(db: Database, state: ReleaseState, jenkins_ready: bool) -> dict[str, Any]:
     expire_stale(db)
     cur = state.current()
@@ -88,16 +103,16 @@ def options(db: Database, state: ReleaseState, jenkins_ready: bool) -> dict[str,
         blockers.append("Jenkins is not configured on the platform (JENKINS_URL/USER/TOKEN).")
     if not cur["available"]:
         blockers.append("Release state is not available (is /opt/app/state mounted?).")
-    rollback_ok = bool(cur["last_good_image"]) and cur["last_good_image"] != cur["current_image"]
+    targets = rollback_targets(state)
     return {
         "release": cur,
         "active": active,
         "blockers": blockers,
-        "rollback": {"available": rollback_ok, "default_target": cur["last_good_image"],
-                     "reason": None if rollback_ok else
-                     ("no last good image recorded" if not cur["last_good_image"]
-                      else "the running image is already the last good image"),
-                     "targets": sorted(known_images(state) - {cur["current_image"]})},
+        # Any earlier successful release is a valid target, even when the running image is
+        # also the last good one (a release that passed its smoke test and broke later).
+        "rollback": {"available": bool(targets), "default_target": targets[0] if targets else None,
+                     "reason": None if targets else "no earlier release to roll back to",
+                     "targets": targets},
         "restart": {"available": bool(cur["current_image"])},
     }
 
@@ -111,9 +126,11 @@ def create(db: Database, state: ReleaseState, *, action: str, target_image: str 
     if not cur["available"]:
         raise RecoveryError(409, "release state not available; cannot plan a recovery")
     if action == "rollback":
-        target_image = target_image or cur["last_good_image"]
         if not target_image:
-            raise RecoveryError(409, "no last good image to roll back to")
+            targets = rollback_targets(state)
+            target_image = targets[0] if targets else None
+        if not target_image:
+            raise RecoveryError(409, "no earlier release to roll back to")
         if target_image not in known_images(state):
             raise RecoveryError(422, "rollback target must be an image from the release history")
         if target_image == cur["current_image"]:

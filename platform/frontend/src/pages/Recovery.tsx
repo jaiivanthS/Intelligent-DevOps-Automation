@@ -178,7 +178,7 @@ function RequestCard(props: {
                 {opts.rollback.targets.map((t) => (
                   <option key={t} value={t}>
                     {fmt.tag(t)}
-                    {t === opts.rollback.default_target ? " (last good)" : ""}
+                    {t === opts.release.last_good_image ? " (last good)" : t === opts.rollback.default_target ? " (previous release)" : ""}
                   </option>
                 ))}
               </select>
@@ -317,6 +317,7 @@ function ActiveCard(props: { opts: Options | null; name: string; setName: (n: st
           </label>
           {props.opts?.distinct_approver_required && <p className="muted small">Four-eyes rule: you cannot approve your own request.</p>}
           {err && <div className="banner banner-bad">{err}</div>}
+          {props.name.trim().length < 2 && <p className="hint-warn small">Enter your name above to enable Approve / Reject.</p>}
           <div className="actions">
             <button type="button" className="primary" disabled={busy || props.name.trim().length < 2} onClick={() => decide("approve")}>
               Approve &amp; execute
