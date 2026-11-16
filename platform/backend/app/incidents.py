@@ -154,12 +154,19 @@ def ingest_alertmanager(db: Database, payload: dict[str, Any], default_service: 
             values = (incident_id, labels.get("alertname", "alert"), service,
                       labels.get("severity", "warning"), labels.get("category", "unknown"),
                       int(is_gt), alert.get("startsAt"), dumps(labels), dumps(annotations), now)
+            if row is not None and row["incident_id"] != incident_id:
+                # A previously resolved alert fires again for a DIFFERENT incident: keep the
+                # old occurrence attached to its own incident (its history and the evidence
+                # its RCA used) under an archived fingerprint, and record a new occurrence.
+                c.execute("UPDATE alerts SET fingerprint = ? WHERE id = ?",
+                          (f"{fp}#{row['id']}", row["id"]))
+                row = None
             if row is None:
                 c.execute(
                     "INSERT INTO alerts (incident_id, alertname, service, severity, category, "
                     "ground_truth, starts_at, labels, annotations, updated_at, status, fingerprint)"
                     " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'firing', ?)", (*values, fp))
-            else:  # a previously resolved alert fires again
+            else:  # fires again for the same incident (e.g. after a reopen)
                 c.execute(
                     "UPDATE alerts SET incident_id = ?, alertname = ?, service = ?, severity = ?, "
                     "category = ?, ground_truth = ?, starts_at = ?, labels = ?, annotations = ?, "

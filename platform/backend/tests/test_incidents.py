@@ -85,6 +85,26 @@ def test_alert_after_reopen_window_opens_new_incident(client, monkeypatch):
     assert again["opened_incidents"][0] != inc_id
 
 
+def test_refired_alert_keeps_its_history_on_the_old_incident(client, monkeypatch):
+    import app.incidents
+    monkeypatch.setattr(app.incidents, "REOPEN_WINDOW_MIN", 0)
+    first = post_alerts(client, alert("DependencyDown", category="dependency"))[
+        "opened_incidents"][0]
+    post_alerts(client, alert("DependencyDown", status="resolved", category="dependency"))
+    second = post_alerts(client, alert("DependencyDown", category="dependency"))[
+        "opened_incidents"][0]
+    assert second != first
+    old = client.get(f"/api/incidents/{first}").json()
+    new = client.get(f"/api/incidents/{second}").json()
+    assert [a["alertname"] for a in old["alerts"]] == ["DependencyDown"]
+    assert old["alerts"][0]["status"] == "resolved"
+    assert [a["alertname"] for a in new["alerts"]] == ["DependencyDown"]
+    assert new["alerts"][0]["status"] == "firing"
+    # The resolution of the new occurrence must update the new row only.
+    post_alerts(client, alert("DependencyDown", status="resolved", category="dependency"))
+    assert client.get(f"/api/incidents/{second}").json()["status"] == "resolved"
+
+
 def test_baseline_ignores_points_inside_other_incidents():
     from app.incidents import _summarise
     # 0-9: healthy (1%), 10-19: an earlier incident (60%), 20-29: this incident (40%).

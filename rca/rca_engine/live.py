@@ -21,7 +21,7 @@ from pathlib import Path
 
 from .causes import CHAOS_MODE_TO_CAUSE
 from .engine import RCAEngine
-from .features import extract
+from .features import FEATURE_NAMES, extract
 from .rules import rank as rule_rank
 
 
@@ -43,12 +43,23 @@ def export(api: str, out: str) -> int:
         causes = {CHAOS_MODE_TO_CAUSE[m] for m in modes if m in CHAOS_MODE_TO_CAUSE}
         if len(causes) != 1 or not inc.get("evidence"):
             continue  # unlabelled or ambiguous (several faults at once)
+        # rca_features = the exact feature vector the RCA used when the incident was
+        # analysed. Prefer it for evaluation: alerts/evidence may change afterwards.
         lines.append(json.dumps({"id": inc["id"], "cause": causes.pop(),
-                                 "evidence": inc["evidence"], "alerts": inc["alerts"]}))
+                                 "evidence": inc["evidence"], "alerts": inc["alerts"],
+                                 "rca_features": (inc.get("rca") or {}).get("features")}))
         n += 1
     Path(out).parent.mkdir(parents=True, exist_ok=True)
     Path(out).write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
     return n
+
+
+def features_of(row: dict) -> dict:
+    """Features as analysed at the time if recorded (complete), else re-extracted."""
+    stored = row.get("rca_features")
+    if stored and all(k in stored for k in FEATURE_NAMES):
+        return {k: float(stored[k]) for k in FEATURE_NAMES}
+    return extract(row["evidence"], row["alerts"])
 
 
 def evaluate(data: str, model: str | None) -> dict:
@@ -60,7 +71,7 @@ def evaluate(data: str, model: str | None) -> dict:
                           if engine.model else None)):
         if ranker is None or not rows:
             continue
-        ranked = [ranker(extract(r["evidence"], r["alerts"])) for r in rows]
+        ranked = [ranker(features_of(r)) for r in rows]
         result[name] = {
             "ac1": sum(rk[0] == r["cause"] for rk, r in zip(ranked, rows, strict=True)) / len(rows),
             "ac3": sum(r["cause"] in rk[:3] for rk, r in zip(ranked, rows, strict=True)) / len(rows),

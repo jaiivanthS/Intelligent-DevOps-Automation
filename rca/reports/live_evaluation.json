@@ -1,0 +1,15 @@
+{
+  "incidents": 4,
+  "by_cause": {
+    "error_burst": 2,
+    "dependency_failure": 2
+  },
+  "rule_based": {
+    "ac1": 0.75,
+    "ac3": 1.0
+  },
+  "model": {
+    "ac1": 1.0,
+    "ac3": 1.0
+  }
+}
